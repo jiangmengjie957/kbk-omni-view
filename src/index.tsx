@@ -2,8 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(
+const rootEl = document.getElementById('root') as HTMLElement;
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

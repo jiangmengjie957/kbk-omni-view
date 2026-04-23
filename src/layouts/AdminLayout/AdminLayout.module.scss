@@ -1,0 +1,111 @@
+// 静态布局样式，动态 token 值（颜色/边框）保留在组件 inline style 中
+
+.root {
+  min-height: 100vh;
+}
+
+// ── 侧边栏 ──────────────────────────────────────────
+.sider {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow: hidden;
+  // background / border-right 由 token 控制，写在 inline style
+}
+
+.siderInner {
+  height: 100%;
+  background: transparent !important;
+}
+
+.logoArea {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  // justify-content / padding / border-bottom 由 collapsed 状态 + token 控制，inline style
+}
+
+.logoIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  // background 由 token.colorPrimary 控制，inline style
+}
+
+.logoText {
+  margin-left: 10px !important;
+  font-size: 15px !important;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.menu {
+  border: none !important;
+  margin-top: 8px;
+}
+
+// ── 右侧主体 ─────────────────────────────────────────
+.mainLayout {
+  // margin-left / transition 由 collapsed 状态控制，inline style
+}
+
+// ── Header ──────────────────────────────────────────
+.header {
+  position: sticky !important;
+  top: 0;
+  z-index: 99;
+  height: 64px !important;
+  padding: 0 24px !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  // background / border-bottom 由 token 控制，inline style
+}
+
+.collapseBtn {
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+  // color 由 token.colorTextSecondary 控制，inline style
+
+  &:hover {
+    // hover background 通过 onMouseEnter/Leave 处理（token 值无法在 SCSS 中访问）
+  }
+}
+
+.userArea {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: background 0.2s;
+}
+
+.userName {
+  font-size: 14px !important;
+}
+
+// ── 内容区 ───────────────────────────────────────────
+.content {
+  padding: 24px !important;
+  overflow-x: hidden; // 防止子页面宽内容产生整页横向滚动条
+  overflow-y: auto;
+  // min-height / background 由 token 控制，inline style
+}
