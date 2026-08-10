@@ -6,7 +6,7 @@
   "scripts": {
     "build": "rsbuild build",
     "dev": "rsbuild --open",
-    "preview": "rsbuild preview"
+    "preview": "rsbuild preview --port 3001"
   },
   "dependencies": {
     "@ant-design/icons": "^5.6.1",

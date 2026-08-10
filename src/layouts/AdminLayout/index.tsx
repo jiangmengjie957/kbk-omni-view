@@ -8,6 +8,7 @@ import {
   UserOutlined,
   LogoutOutlined,
   BarChartOutlined,
+  ScheduleOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -32,6 +33,11 @@ const menuItems: MenuProps['items'] = [
     key: '/admin/perf-stats',
     icon: <BarChartOutlined />,
     label: '绩效统计',
+  },
+  {
+    key: '/admin/lesson-cancel-report',
+    icon: <ScheduleOutlined />,
+    label: '消课表',
   },
 ];
 

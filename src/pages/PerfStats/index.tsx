@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Typography, Button, Upload, Table, Modal, List, Tag, message } from 'antd';
 import type { UploadProps, TableColumnsType, TableProps } from 'antd';
-import { DownloadOutlined, InboxOutlined, WarningOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { DownloadOutlined, InboxOutlined, WarningOutlined, QuestionCircleOutlined, HistoryOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import {
   isValidGrade,
@@ -10,10 +10,12 @@ import {
   getBaseFee,
   parseDurationHours,
   parseStudentCount,
-  calculateFee,
   getMultiplier,
   type Grade,
 } from '../../utils/calcFee';
+import { addHistoryRecord } from '../../utils/historyDb';
+import type { HistoryRecord, PerfStatsPayload } from '../../db';
+import HistoryDrawer from '../../components/HistoryDrawer';
 import CalcRulesModal from './CalcRulesModal';
 import styles from './PerfStats.module.scss';
 
@@ -162,6 +164,7 @@ export default function PerfStats() {
   const [errorModalOpen, setErrorModalOpen] = useState(false);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   // ── 模版下载 ────────────────────────────────────────────────
   function handleDownloadTemplate() {
@@ -344,9 +347,33 @@ export default function PerfStats() {
 
         setColumns(cols);
         setTableData(rows);
-        setFeeSummary(buildFeeSummary(rows));
+        const summary = buildFeeSummary(rows);
+        setFeeSummary(summary);
         setParsed(true);
         void messageApi.success(`解析成功，共 ${rows.length} 条记录`);
+
+        // 写入历史记录（复制 ArrayBuffer，避免被 XLSX 消费后引用失效）
+        try {
+          const fileBuffer = (e.target?.result as ArrayBuffer).slice(0);
+          const payload: PerfStatsPayload = {
+            tableData: rows,
+            feeSummary: summary,
+            validationErrors: errors,
+          };
+          void addHistoryRecord({
+            createdAt: Date.now(),
+            type: 'perf-stats',
+            fileName: file.name,
+            fileSize: file.size,
+            fileBinary: fileBuffer,
+            validCount: rows.length,
+            invalidCount: errors.length,
+            targetMonth: null,
+            payload,
+          });
+        } catch (err) {
+          console.warn('[history] 写入失败:', err);
+        }
       } catch {
         void messageApi.error('文件解析失败，请检查文件格式');
       }
@@ -443,6 +470,41 @@ export default function PerfStats() {
     </div>
   );
 
+  // ── 历史记录回填 ─────────────────────────────────────────────
+  function handleHistorySelect(record: HistoryRecord) {
+    try {
+      const payload = record.payload as PerfStatsPayload;
+      if (payload?.tableData) {
+        setTableData(payload.tableData as RowData[]);
+      }
+      if (payload?.feeSummary) {
+        setFeeSummary(payload.feeSummary as TeacherSummary[]);
+      }
+      if (payload?.validationErrors) {
+        setValidationErrors(payload.validationErrors as ValidationError[]);
+        setErrorModalOpen(payload.validationErrors.length > 0);
+      }
+      if (payload?.tableData) {
+        // 重建列
+        const cols: TableColumnsType<RowData> = Object.keys(payload.tableData[0] || {})
+          .filter(k => k !== '_rowKey')
+          .map((header) => ({
+            title: header,
+            dataIndex: header,
+            key: header,
+            ellipsis: true,
+            width: header === '日期' || header === '时间' ? 140 : 100,
+          }));
+        setColumns(cols);
+      }
+      setParsed(true);
+      void messageApi.success('已从历史记录恢复');
+    } catch (err) {
+      console.error('[history] 回填失败:', err);
+      void messageApi.error('历史记录回填失败');
+    }
+  }
+
   return (
     <div className={styles.page}>
       {contextHolder}
@@ -491,6 +553,7 @@ export default function PerfStats() {
             计算规则
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>下载模版</Button>
+          <Button icon={<HistoryOutlined />} onClick={() => setHistoryOpen(true)}>历史记录</Button>
         </div>
       </div>
 
@@ -552,6 +615,14 @@ export default function PerfStats() {
           </div>
         </>
       )}
+
+      {/* 历史记录抽屉 */}
+      <HistoryDrawer
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        type="perf-stats"
+        onSelect={handleHistorySelect}
+      />
     </div>
   );
 }
