@@ -38,6 +38,6 @@ jobs:
           REMOTE_USER: ${{ secrets.REMOTE_USER }}
           SOURCE: 'dist/'
           TARGET: ${{ secrets.DEPLOY_TARGET }}
-          ARGS: '-avz --delete'
+          ARGS: '-avz --delete --exclude=.user.ini'
           SCRIPT_AFTER: |
             sudo systemctl reload nginx

@@ -54,6 +54,7 @@ Workflow: `.github/workflows/deploy.yml`
 - Only the built `dist/` output is deployed.
 - The app is built for the `/kbk-management` base path, so the server should serve the site under that path.
 - `DEPLOY_TARGET` should point to the Baota web root for this app.
+- Deployment excludes Baota's protected `.user.ini` file while keeping `--delete` enabled for stale build assets.
 
 ## Learn more
 
