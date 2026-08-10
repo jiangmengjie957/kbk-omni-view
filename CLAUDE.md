@@ -10,6 +10,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Package manager is `npm` (or `pnpm` — a pnpm lockfile may be present). There is no test runner configured.
 
+## Deployment
+
+- GitHub Actions workflow: `.github/workflows/deploy.yml`
+- Pushes to `main` deploy automatically to the Baota server over SSH
+- Deployment syncs `dist/` to the server target defined by `DEPLOY_TARGET`
+- After upload, the server runs `sudo systemctl reload nginx`
+
 ## Architecture
 
 This is a minimal React 19 single-page application bundled with [Rsbuild](https://rsbuild.rs) (Rspack-based, webpack-compatible).
