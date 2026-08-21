@@ -5,6 +5,7 @@ import Login from "../pages/Login";
 import Welcome from "../pages/Welcome";
 import PerfStats from "../pages/PerfStats";
 import LessonCancelReport from "../pages/LessonCancelReport";
+import LessonHourStats from "../pages/LessonHourStats";
 
 const router = createBrowserRouter(
   [
@@ -39,6 +40,10 @@ const router = createBrowserRouter(
         {
           path: "lesson-cancel-report",
           element: <LessonCancelReport />,
+        },
+        {
+          path: "lesson-hour-stats",
+          element: <LessonHourStats />,
         },
       ],
     },

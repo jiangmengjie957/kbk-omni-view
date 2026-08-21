@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
-import { Typography, Button, Upload, Table, Modal, Radio, Alert, List, Tag, message, Tooltip } from 'antd';
+import { useState } from 'react';
+import { Typography, Button, Upload, Table, Modal, Checkbox, Alert, List, Tag, message, Tooltip } from 'antd';
 import type { UploadProps, TableColumnsType } from 'antd';
-import { DownloadOutlined, InboxOutlined, TableOutlined, HistoryOutlined } from '@ant-design/icons';
+import { DownloadOutlined, InboxOutlined, TableOutlined, HistoryOutlined, CloudUploadOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import {
   validateRows,
@@ -22,7 +22,17 @@ import {
   updateHistoryRecord,
   isLessonCancelPayload,
 } from '../../utils/historyDb';
-import type { HistoryRecord, LessonCancelPayload } from '../../db';
+import {
+  upsertMonthlyRecord,
+  findExistingMonthlyUnit,
+} from '../../utils/persistentLessonDb';
+import { formatYearMonth } from '../../utils/lessonHourStats';
+import type {
+  HistoryRecord,
+  LessonCancelPayload,
+  LessonMonthlyRecord,
+  StudentMonthlyEntry,
+} from '../../db';
 import HistoryDrawer from '../../components/HistoryDrawer';
 import styles from './LessonCancelReport.module.scss';
 
@@ -50,17 +60,22 @@ function fmtMonthShort(m: YearMonth): string {
 
 export default function LessonCancelReport() {
   const [messageApi, contextHolder] = message.useMessage();
+  // 用 Modal.useModal() hook 模式，避免命令式 Modal.confirm 被其他元素遮挡
+  const [modal, modalContextHolder] = Modal.useModal();
   const [rawRows, setRawRows] = useState<PreviewRow[]>([]);
   const [previewColumns, setPreviewColumns] = useState<TableColumnsType<PreviewRow>>([]);
   const [validRows, setValidRows] = useState<ValidRow[]>([]);
   const [invalidRows, setInvalidRows] = useState<ValidationError[]>([]);
   const [parsed, setParsed] = useState(false);
-  const [targetMonth, setTargetMonth] = useState<YearMonth | null>(null);
-  const [matrix, setMatrix] = useState<CancelMatrix | null>(null);
   const [monthModalOpen, setMonthModalOpen] = useState(false);
   const [monthOptions, setMonthOptions] = useState<MonthOption[]>([]);
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
+  // 多月矩阵：一次生成多个月的矩阵，按月份分段展示
+  const [matrices, setMatrices] = useState<Array<{ month: YearMonth; matrix: CancelMatrix }>>([]);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  // 已保存到长期存储的月份集合（yearMonth 字符串）
+  const [savedMonths, setSavedMonths] = useState<Set<string>>(new Set());
 
   // ── Excel 解析 ──────────────────────────────────────────────
   function parseFile(file: File) {
@@ -131,8 +146,8 @@ export default function LessonCancelReport() {
         setValidRows(vr);
         setInvalidRows(ir);
         setParsed(true);
-        setMatrix(null);
-        setTargetMonth(null);
+        setMatrices([]);
+        setSavedMonths(new Set());
         const okCount = vr.length;
         const warnCount = ir.length;
         if (warnCount > 0) {
@@ -206,51 +221,58 @@ export default function LessonCancelReport() {
       return;
     }
     if (months.length === 1) {
-      generateForMonth(months[0]);
+      generateForMonths([months[0]]);
       return;
     }
-    // 多月：弹窗
+    // 多月：弹窗（多选，默认全选）
     const opts: MonthOption[] = months.map(m => ({ ...m, label: fmtMonth(m) }));
     setMonthOptions(opts);
-    // 默认选最近月（已升序，最后一个是最近）
-    setSelectedMonth(fmtMonthShort(opts[opts.length - 1]));
+    setSelectedMonths(opts.map(o => fmtMonthShort(o))); // 默认全选
     setMonthModalOpen(true);
   }
 
-  function generateForMonth(m: YearMonth) {
-    const mat = buildCancelMatrix(validRows, m.year, m.month);
-    setTargetMonth(m);
-    setMatrix(mat);
+  function generateForMonths(months: YearMonth[]) {
+    const newMatrices = months.map(m => ({
+      month: m,
+      matrix: buildCancelMatrix(validRows, m.year, m.month),
+    }));
+    setMatrices(newMatrices);
+    setSavedMonths(new Set()); // 重新生成后重置保存状态
     void messageApi.success(
-      `已生成 ${fmtMonth(m)} 消课表，共 ${mat.rows.length} 位学生`,
+      `已生成 ${months.length} 个月消课表（${months.map(m => fmtMonth(m)).join('、')}）`,
     );
-    // 更新最近一条 lesson-cancel 历史记录的 payload.matrix 与 targetMonth
-    void (async () => {
-      try {
-        const latest = await getLatestHistoryByType('lesson-cancel');
-        if (!latest || !latest.id) return;
-        if (!isLessonCancelPayload(latest.payload)) return;
-        const updatedPayload: LessonCancelPayload = {
-          ...latest.payload,
-          matrix: mat,
-          targetMonth: m,
-        };
-        await updateHistoryRecord(latest.id, {
-          payload: updatedPayload,
-          targetMonth: m,
-        });
-      } catch (err) {
-        console.warn('[history] 更新矩阵失败:', err);
-      }
-    })();
+    // 更新最近一条 lesson-cancel 历史记录（兼容单月场景：取第一个月份）
+    if (newMatrices.length > 0) {
+      const first = newMatrices[0];
+      void (async () => {
+        try {
+          const latest = await getLatestHistoryByType('lesson-cancel');
+          if (!latest || !latest.id) return;
+          if (!isLessonCancelPayload(latest.payload)) return;
+          const updatedPayload: LessonCancelPayload = {
+            ...latest.payload,
+            matrix: first.matrix,
+            targetMonth: first.month,
+          };
+          await updateHistoryRecord(latest.id, {
+            payload: updatedPayload,
+            targetMonth: first.month,
+          });
+        } catch (err) {
+          console.warn('[history] 更新矩阵失败:', err);
+        }
+      })();
+    }
   }
 
   function handleMonthConfirm() {
-    const opt = monthOptions.find(o => fmtMonthShort(o) === selectedMonth);
-    if (opt) {
-      setMonthModalOpen(false);
-      generateForMonth(opt);
+    const opts = monthOptions.filter(o => selectedMonths.includes(fmtMonthShort(o)));
+    if (opts.length === 0) {
+      void messageApi.warning('请至少选择一个月份');
+      return;
     }
+    setMonthModalOpen(false);
+    generateForMonths(opts);
   }
 
   // ── 从历史记录回填 ─────────────────────────────────────────
@@ -278,19 +300,121 @@ export default function LessonCancelReport() {
     setRawRows(p.rawRows as PreviewRow[]);
     setValidRows(p.validRows as ValidRow[]);
     setInvalidRows(p.invalidRows as ValidationError[]);
-    setMatrix((p.matrix as CancelMatrix) ?? null);
-    setTargetMonth((p.targetMonth as YearMonth) ?? null);
+    // 历史记录回填：单矩阵包装成单元素数组，复用多月展示逻辑
+    const restoredMatrix = (p.matrix as CancelMatrix) ?? null;
+    const restoredMonth = (p.targetMonth as YearMonth) ?? null;
+    if (restoredMatrix && restoredMonth) {
+      setMatrices([{ month: restoredMonth, matrix: restoredMatrix }]);
+    } else {
+      setMatrices([]);
+    }
     setParsed(true);
+    setSavedMonths(new Set());
     void messageApi.success(`已回填历史记录：${record.fileName}`);
   }
 
-  // ── 导出 Excel ──────────────────────────────────────────────
-  function handleExport() {
-    if (!matrix || !targetMonth) {
+  // ── 导出指定月份 Excel ─────────────────────────────────────
+  function handleExportMonth(m: YearMonth, mat: CancelMatrix) {
+    exportCancelMatrix(mat, m);
+  }
+
+  // ── 保存单个月到长期存储 ──────────────────────────────────
+  async function handleSaveMonthToPersistent(m: YearMonth, mat: CancelMatrix) {
+    const yearMonth = formatYearMonth(m.year, m.month);
+    const now = Date.now();
+
+    // 把该月矩阵打包成一条月度单元
+    const students: StudentMonthlyEntry[] = mat.rows.map(r => {
+      const dayMap: Record<number, number> = {};
+      r.dayMap.forEach((v, day) => {
+        if (v != null && v !== 0) dayMap[day] = v;
+      });
+      return {
+        studentName: r.student,
+        banXing: r.banXing,
+        dayMap,
+        total: r.total,
+      };
+    });
+
+    const record: LessonMonthlyRecord = {
+      yearMonth,
+      students,
+      total: students.reduce((sum, s) => sum + s.total, 0),
+      savedAt: now,
+    };
+
+    try {
+      const existing = await findExistingMonthlyUnit(yearMonth);
+
+      const doSave = async () => {
+        await upsertMonthlyRecord(record);
+        setSavedMonths(prev => new Set(prev).add(yearMonth));
+        void messageApi.success(
+          `已保存 ${yearMonth} 月度记录（${students.length} 位学生，共 ${record.total} 节）`,
+        );
+      };
+
+      if (!existing) {
+        await doSave();
+        return;
+      }
+
+      modal.confirm({
+        title: '覆盖确认',
+        content: `${yearMonth} 已存在长期消课单元（${existing.students.length} 位学生），是否覆盖？`,
+        okText: '覆盖',
+        okType: 'danger',
+        cancelText: '取消',
+        onOk: doSave,
+      });
+    } catch (err) {
+      console.error('[persistent] 保存失败:', err);
+      void messageApi.error(`保存失败：${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  // ── 保存所有未保存月份到长期存储 ──────────────────────────
+  async function handleSaveAllToPersistent() {
+    if (matrices.length === 0) {
       void messageApi.warning('请先生成消课表');
       return;
     }
-    exportCancelMatrix(matrix, targetMonth);
+    const unsaved = matrices.filter(
+      ({ month }) => !savedMonths.has(formatYearMonth(month.year, month.month)),
+    );
+    if (unsaved.length === 0) {
+      void messageApi.info('所有月份已保存到长期存储');
+      return;
+    }
+    // 逐月保存（每条 upsertMonthlyRecord 内部会检测覆盖，这里简化为直接覆盖不弹确认）
+    let savedCount = 0;
+    for (const { month, matrix: mat } of unsaved) {
+      const yearMonth = formatYearMonth(month.year, month.month);
+      const existing = await findExistingMonthlyUnit(yearMonth);
+      if (existing) {
+        // 有已存在的月份，整体走覆盖确认流程
+        modal.confirm({
+          title: '覆盖确认',
+          content: `${unsaved.length} 个月度单元中，部分月份已存在长期记录（如 ${yearMonth}），是否全部覆盖？`,
+          okText: '全部覆盖',
+          okType: 'danger',
+          cancelText: '取消',
+          onOk: async () => {
+            for (const { month: m, matrix: mm } of unsaved) {
+              await handleSaveMonthToPersistent(m, mm);
+            }
+          },
+        });
+        return;
+      }
+      // 全新保存
+      await handleSaveMonthToPersistent(month, mat);
+      savedCount++;
+    }
+    if (savedCount > 0) {
+      void messageApi.success(`已保存 ${savedCount} 个月度单元`);
+    }
   }
 
   function exportCancelMatrix(mat: CancelMatrix, m: YearMonth) {
@@ -330,11 +454,9 @@ export default function LessonCancelReport() {
     XLSX.writeFile(wb, `消课表_${m.year}年${m.month}月.xlsx`);
   }
 
-  // ── 矩阵列构造 ──────────────────────────────────────────────
-  const matrixColumns: TableColumnsType<MatrixRow & { _seq: number }> = useMemo(() => {
-    if (!matrix) return [];
-    const days = matrix.daysInMonth;
-    const cols: TableColumnsType<MatrixRow & { _seq: number }> = [
+  // ── 矩阵列构造（按天数动态生成，每月独立）─────────────────
+  function buildMatrixColumns(days: number): TableColumnsType<MatrixRow & { _seq: number }> {
+    return [
       { title: '序号', dataIndex: '_seq', key: '_seq', width: 56, fixed: 'left', align: 'center' },
       { title: '学生姓名', dataIndex: 'student', key: 'student', width: 100, fixed: 'left' },
       { title: '班型', dataIndex: 'banXing', key: 'banXing', width: 70, fixed: 'left' },
@@ -364,17 +486,16 @@ export default function LessonCancelReport() {
         render: (v: number) => <strong>{formatLessonCount(v)}</strong>,
       },
     ];
-    return cols;
-  }, [matrix]);
+  }
 
-  const matrixDataSource = useMemo(() => {
-    if (!matrix) return [];
-    return matrix.rows.map((r, i) => ({ ...r, _seq: i + 1 }));
-  }, [matrix]);
+  function buildMatrixDataSource(mat: CancelMatrix) {
+    return mat.rows.map((r, i) => ({ ...r, _seq: i + 1 }));
+  }
 
   return (
     <div className={styles.page}>
       {contextHolder}
+      {modalContextHolder}
 
       {/* 页头 */}
       <div className={styles.pageHeader}>
@@ -388,13 +509,15 @@ export default function LessonCancelReport() {
           >
             生成消课表
           </Button>
-          <Tooltip title={!matrix ? '请先生成消课表' : ''}>
+          <Tooltip title={matrices.length === 0 ? '请先生成消课表' : ''}>
             <Button
-              icon={<DownloadOutlined />}
-              onClick={handleExport}
-              disabled={!matrix}
+              icon={<CloudUploadOutlined />}
+              onClick={handleSaveAllToPersistent}
+              disabled={matrices.length === 0 || savedMonths.size === matrices.length}
             >
-              导出 Excel
+              {savedMonths.size === matrices.length && matrices.length > 0
+                ? '已全部保存到长期存储'
+                : '保存全部到长期存储'}
             </Button>
           </Tooltip>
           <Button
@@ -402,6 +525,13 @@ export default function LessonCancelReport() {
             onClick={() => setHistoryOpen(true)}
           >
             历史记录
+          </Button>
+          <Button
+            type="text"
+            icon={<QuestionCircleOutlined />}
+            onClick={() => setHelpOpen(true)}
+          >
+            使用说明
           </Button>
         </div>
       </div>
@@ -443,27 +573,50 @@ export default function LessonCancelReport() {
         />
       )}
 
-      {/* 消课矩阵 */}
-      {matrix && targetMonth && (
-        <div className={styles.matrixSection}>
-          <div className={styles.matrixHeader}>
-            <span className={styles.matrixTitle}>
-              消课表 · {fmtMonth(targetMonth)}
-            </span>
-            <Text className={styles.rowCount}>共 {matrix.rows.length} 位学生</Text>
+      {/* 消课矩阵（按月份分段展示，支持多月）*/}
+      {matrices.map(({ month, matrix: mat }) => {
+        const yearMonth = formatYearMonth(month.year, month.month);
+        const monthSaved = savedMonths.has(yearMonth);
+        return (
+          <div className={styles.matrixSection} key={yearMonth}>
+            <div className={styles.matrixHeader}>
+              <span className={styles.matrixTitle}>
+                消课表 · {fmtMonth(month)}
+              </span>
+              <div className={styles.toolbar}>
+                <Button
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  onClick={() => handleExportMonth(month, mat)}
+                >
+                  导出 Excel
+                </Button>
+                <Tooltip title={monthSaved ? '本月度已保存到长期存储' : ''}>
+                  <Button
+                    size="small"
+                    icon={<CloudUploadOutlined />}
+                    onClick={() => handleSaveMonthToPersistent(month, mat)}
+                    disabled={monthSaved}
+                  >
+                    {monthSaved ? '已保存' : '保存到长期存储'}
+                  </Button>
+                </Tooltip>
+                <Text className={styles.rowCount}>共 {mat.rows.length} 位学生</Text>
+              </div>
+            </div>
+            <Table
+              className={styles.matrixTable}
+              columns={buildMatrixColumns(mat.daysInMonth)}
+              dataSource={buildMatrixDataSource(mat)}
+              rowKey="key"
+              size="small"
+              scroll={{ x: 'max-content' }}
+              tableLayout="fixed"
+              pagination={false}
+            />
           </div>
-          <Table
-            className={styles.matrixTable}
-            columns={matrixColumns}
-            dataSource={matrixDataSource}
-            rowKey="key"
-            size="small"
-            scroll={{ x: 'max-content' }}
-            tableLayout="fixed"
-            pagination={false}
-          />
-        </div>
-      )}
+        );
+      })}
 
       {/* 原始数据预览 */}
       {parsed && (
@@ -485,29 +638,29 @@ export default function LessonCancelReport() {
         </div>
       )}
 
-      {/* 月份选择弹窗 */}
+      {/* 月份选择弹窗（多选）*/}
       <Modal
         open={monthModalOpen}
-        title="选择生成消课表的月份"
+        title="选择生成消课表的月份（可多选）"
         onCancel={() => setMonthModalOpen(false)}
         onOk={handleMonthConfirm}
         okText="生成"
         cancelText="取消"
       >
         <p style={{ marginBottom: 12, color: '#666' }}>
-          导入数据涉及多个月，请选择要生成消课表的月份：
+          导入数据涉及多个月，请勾选要生成消课表的月份（已默认全选）：
         </p>
-        <Radio.Group
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
+        <Checkbox.Group
+          value={selectedMonths}
+          onChange={(checkedValues) => setSelectedMonths(checkedValues as string[])}
           style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
         >
           {monthOptions.map(o => (
-            <Radio key={fmtMonthShort(o)} value={fmtMonthShort(o)}>
+            <Checkbox key={fmtMonthShort(o)} value={fmtMonthShort(o)}>
               {o.label}
-            </Radio>
+            </Checkbox>
           ))}
-        </Radio.Group>
+        </Checkbox.Group>
       </Modal>
 
       {/* 历史记录抽屉 */}
@@ -517,6 +670,58 @@ export default function LessonCancelReport() {
         type="lesson-cancel"
         onSelect={handleHistorySelect}
       />
+
+      {/* 使用说明 */}
+      <Modal
+        open={helpOpen}
+        title="消课表使用说明"
+        onCancel={() => setHelpOpen(false)}
+        footer={null}
+        width={640}
+      >
+        <div style={{ lineHeight: 1.8, fontSize: 14 }}>
+          <h3>1. 上传 Excel</h3>
+          <ul style={{ paddingLeft: 20 }}>
+            <li>支持 <code>.xlsx</code> / <code>.xls</code> 格式</li>
+            <li>优先解析名为 <strong>"取值"</strong> 的 sheet，否则取第一个 sheet</li>
+            <li>第 1 行为表头，必需列：<strong>日期、时段、次数、学员姓名、班型</strong></li>
+            <li>可选列：科目、老师、年级、学生人数</li>
+            <li>班型支持归一化：1V1/1v1/一对一 → 1v1；1V3/1v3/一对三 → 1v3，以此类推</li>
+          </ul>
+
+          <h3>2. 生成消课表</h3>
+          <ul style={{ paddingLeft: 20 }}>
+            <li>点击"生成消课表"按钮</li>
+            <li>数据涉及多个月时，弹窗<strong>可多选</strong>月份（默认全选）</li>
+            <li>生成后按月份分段展示，每个月一个矩阵</li>
+            <li>矩阵行 = 学生 × 班型，列 = 1 号至当月最后一天，单元格 = 当日节数</li>
+            <li>次数为 0.5 等小数会保留并橙色显示</li>
+          </ul>
+
+          <h3>3. 导出 Excel</h3>
+          <ul style={{ paddingLeft: 20 }}>
+            <li>每个月份区块有独立的"导出 Excel"按钮</li>
+            <li>导出文件名格式：<code>消课表_YYYY年M月.xlsx</code></li>
+          </ul>
+
+          <h3>4. 保存到长期存储</h3>
+          <ul style={{ paddingLeft: 20 }}>
+            <li>点击"保存全部到长期存储"可一次性保存所有月份</li>
+            <li>也可点击每个月份区块的"保存到长期存储"单独保存</li>
+            <li>长期存储<strong>不过期</strong>，是"课时统计"页面的数据源</li>
+            <li>同月份已存在时会弹覆盖确认（覆盖 / 取消）</li>
+            <li>保存成功后按钮变"已保存"，重新生成矩阵后恢复可保存</li>
+          </ul>
+
+          <h3>5. 历史记录</h3>
+          <ul style={{ paddingLeft: 20 }}>
+            <li>点击"历史记录"打开抽屉，含两个 Tab：</li>
+            <li><strong>上传历史</strong>：每次上传的文件记录，1 年后自动清理，可下载原始文件</li>
+            <li><strong>长期消课单元</strong>：保存到长期存储的月度记录，不过期，按月份展示</li>
+            <li>两个 Tab 独立勾选删除，互不影响</li>
+          </ul>
+        </div>
+      </Modal>
     </div>
   );
 }

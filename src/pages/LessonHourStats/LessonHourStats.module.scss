@@ -1,0 +1,165 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title {
+  margin: 0 !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.toolbarDivider {
+  width: 1px;
+  height: 20px;
+  background: #e4e7ec;
+  margin: 0 4px;
+}
+
+// ── 卡片通用混入 ──────────────────────────────────────────────
+%card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+// ── 筛选区 ───────────────────────────────────────────────────
+.filterSection {
+  @extend %card;
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filterItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filterLabel {
+  font-size: 13px;
+  color: #595959;
+  white-space: nowrap;
+}
+
+// ── 告警面板 ─────────────────────────────────────────────────
+.alertBox {
+  :global(.ant-alert-message) {
+    font-weight: 600;
+  }
+}
+
+.unmatchedList {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.8;
+  color: #595959;
+}
+
+// 小数节数用橙色突出（与消课表一致）
+.fraction {
+  color: #fa8c16;
+}
+
+// ── 统计表格 ─────────────────────────────────────────────────
+.statsSection {
+  @extend %card;
+  padding: 24px 24px 0;
+}
+
+.statsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.statsTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.rowCount {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+.statsTable {
+  :global(.ant-table-cell) {
+    white-space: nowrap;
+    font-size: 13px;
+  }
+}
+
+// ── 进度条与状态 ─────────────────────────────────────────────
+.progressCell {
+  min-width: 120px;
+}
+
+.dashText {
+  color: #bfbfbf;
+}
+
+.statusTag {
+  font-size: 12px;
+}
+
+// ── 超支行高亮 ───────────────────────────────────────────────
+:global(.row-over) {
+  background-color: #fff1f0 !important;
+
+  &:hover > td {
+    background-color: #ffccc7 !important;
+  }
+}
+
+:global(.row-exhausted) {
+  background-color: #fffbe6 !important;
+
+  &:hover > td {
+    background-color: #fff1b8 !important;
+  }
+}
+
+// ── 导入弹窗 ─────────────────────────────────────────────────
+.importPreview {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+.importHint {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+}
+
+.emptySection {
+  @extend %card;
+  padding: 48px 24px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

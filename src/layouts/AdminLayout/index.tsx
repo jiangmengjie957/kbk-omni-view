@@ -9,6 +9,7 @@ import {
   LogoutOutlined,
   BarChartOutlined,
   ScheduleOutlined,
+  PieChartOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -38,6 +39,11 @@ const menuItems: MenuProps['items'] = [
     key: '/admin/lesson-cancel-report',
     icon: <ScheduleOutlined />,
     label: '消课表',
+  },
+  {
+    key: '/admin/lesson-hour-stats',
+    icon: <PieChartOutlined />,
+    label: '课时统计',
   },
 ];
 

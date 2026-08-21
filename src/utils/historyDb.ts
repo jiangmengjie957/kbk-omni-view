@@ -27,10 +27,10 @@ export async function listHistoryByType(
   const records = await db.historyRecords
     .where('type')
     .equals(type)
-    .reverse()
-    .sortBy('createdAt');
-  // reverse() 后 sortBy 会按 createdAt 降序
-  return records.reverse();
+    .toArray();
+  // JS 层排序：createdAt 降序（最近在前），避免 Dexie reverse()+sortBy() 组合的行为歧义
+  records.sort((a, b) => b.createdAt - a.createdAt);
+  return records;
 }
 
 // ── 批量删除（单事务原子操作）──────────────────────────────
