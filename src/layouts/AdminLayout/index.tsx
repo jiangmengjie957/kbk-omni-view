@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout, Menu, Dropdown, Avatar, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -7,6 +7,7 @@ import {
   HomeOutlined,
   UserOutlined,
   LogoutOutlined,
+  DashboardOutlined,
   BarChartOutlined,
   ScheduleOutlined,
   PieChartOutlined,
@@ -26,6 +27,8 @@ const SIDER_WIDTH = 220;
 const SIDER_COLLAPSED_WIDTH = 64;
 const HEADER_HEIGHT = 64;
 
+const STATS_MENU_KEY = 'data-stats';
+
 const menuItems: MenuProps['items'] = [
   {
     key: '/admin',
@@ -33,19 +36,26 @@ const menuItems: MenuProps['items'] = [
     label: '首页',
   },
   {
-    key: '/admin/perf-stats',
-    icon: <BarChartOutlined />,
-    label: '绩效统计',
-  },
-  {
-    key: '/admin/lesson-cancel-report',
-    icon: <ScheduleOutlined />,
-    label: '消课表',
-  },
-  {
-    key: '/admin/lesson-hour-stats',
-    icon: <PieChartOutlined />,
-    label: '课时统计',
+    key: STATS_MENU_KEY,
+    icon: <DashboardOutlined />,
+    label: '数据统计',
+    children: [
+      {
+        key: '/admin/perf-stats',
+        icon: <BarChartOutlined />,
+        label: '绩效统计',
+      },
+      {
+        key: '/admin/lesson-cancel-report',
+        icon: <ScheduleOutlined />,
+        label: '消课表',
+      },
+      {
+        key: '/admin/lesson-hour-stats',
+        icon: <PieChartOutlined />,
+        label: '课时统计',
+      },
+    ],
   },
 ];
 
@@ -67,6 +77,20 @@ export default function AdminLayout() {
   const [pwdModalOpen, setPwdModalOpen] = useState(
     () => getAuthState()?.mustChangePassword === true
   );
+  const [openKeys, setOpenKeys] = useState<string[]>([STATS_MENU_KEY]);
+
+  // 路由切到统计子页时，确保“数据统计”子菜单展开
+  useEffect(() => {
+    if (
+      location.pathname === '/admin/perf-stats' ||
+      location.pathname === '/admin/lesson-cancel-report' ||
+      location.pathname === '/admin/lesson-hour-stats'
+    ) {
+      setOpenKeys(prev =>
+        prev.includes(STATS_MENU_KEY) ? prev : [...prev, STATS_MENU_KEY]
+      );
+    }
+  }, [location.pathname]);
 
   function handleMenuClick({ key }: { key: string }) {
     void navigate(key);
@@ -129,6 +153,8 @@ export default function AdminLayout() {
           <Menu
             mode="inline"
             selectedKeys={[location.pathname]}
+            openKeys={openKeys}
+            onOpenChange={setOpenKeys}
             items={menuItems}
             onClick={handleMenuClick}
             className={styles.menu}
