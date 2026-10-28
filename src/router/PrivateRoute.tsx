@@ -1,21 +1,17 @@
 import type { ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate } from 'react-router-dom';
 import { getAuthState, isAuthenticated } from '../hooks/useAuth';
 
 interface Props {
   children: ReactNode;
 }
 
-// 保护受限路由：未登录跳转 /login；需改密时强制跳转 /change-password
+// 保护受限路由：未登录跳转 /login
 export function RequireAuth({ children }: Props) {
-  const location = useLocation();
   const auth = getAuthState();
 
   if (!auth) {
     return <Navigate to="/login" replace />;
-  }
-  if (auth.mustChangePassword && location.pathname !== '/change-password') {
-    return <Navigate to="/change-password" replace />;
   }
   return <>{children}</>;
 }

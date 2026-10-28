@@ -16,6 +16,7 @@ import { motion } from 'framer-motion';
 import { clearAuthState, getAuthState } from '../../hooks/useAuth';
 import { logout } from '../../api/auth';
 import PageTransition from '../../components/PageTransition';
+import ChangePasswordModal from '../../components/ChangePasswordModal';
 import styles from './AdminLayout.module.scss';
 
 const { Sider, Header, Content } = Layout;
@@ -63,6 +64,9 @@ export default function AdminLayout() {
   const location = useLocation();
   const { token } = theme.useToken();
   const userName = getAuthState()?.user?.name ?? '用户';
+  const [pwdModalOpen, setPwdModalOpen] = useState(
+    () => getAuthState()?.mustChangePassword === true
+  );
 
   function handleMenuClick({ key }: { key: string }) {
     void navigate(key);
@@ -189,6 +193,12 @@ export default function AdminLayout() {
           </PageTransition>
         </Content>
       </Layout>
+
+      {/* 首次登录强提醒：修改初始密码，可关闭跳过 */}
+      <ChangePasswordModal
+        open={pwdModalOpen}
+        onClose={() => setPwdModalOpen(false)}
+      />
     </Layout>
   );
 }

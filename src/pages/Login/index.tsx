@@ -26,10 +26,7 @@ export default function Login() {
       const res = await login({ username, password });
       setAuthState(res.data);
       void messageApi.success('登录成功');
-      void navigate(
-        res.data.mustChangePassword ? '/change-password' : '/admin',
-        { replace: true }
-      );
+      void navigate('/admin', { replace: true });
     } catch {
       // 错误已在公共请求层（client.ts）统一提示
     } finally {

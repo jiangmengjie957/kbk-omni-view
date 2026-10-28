@@ -2,7 +2,6 @@ import { createBrowserRouter, Navigate } from "react-router-dom";
 import { RequireAuth, RedirectIfAuth } from "./PrivateRoute";
 import AdminLayout from "../layouts/AdminLayout";
 import Login from "../pages/Login";
-import ChangePassword from "../pages/ChangePassword";
 import Welcome from "../pages/Welcome";
 import PerfStats from "../pages/PerfStats";
 import LessonCancelReport from "../pages/LessonCancelReport";
@@ -20,14 +19,6 @@ const router = createBrowserRouter(
         <RedirectIfAuth>
           <Login />
         </RedirectIfAuth>
-      ),
-    },
-    {
-      path: "/change-password",
-      element: (
-        <RequireAuth>
-          <ChangePassword />
-        </RequireAuth>
       ),
     },
     {
