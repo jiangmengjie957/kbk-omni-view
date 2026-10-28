@@ -9,7 +9,6 @@ import {
   Alert,
   Select,
   Input,
-  Progress,
   Tag,
   Empty,
   message,
@@ -36,8 +35,6 @@ import {
   matchQuota,
   extractAvailableYears,
   computeUnmatched,
-  type DayMatrixRow,
-  type MonthMatrixRow,
 } from '../../utils/lessonHourStats';
 import type { LessonMonthlyRecord, StudentQuota } from '../../db';
 import styles from './LessonHourStats.module.scss';

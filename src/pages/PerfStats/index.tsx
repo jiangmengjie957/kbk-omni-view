@@ -334,7 +334,7 @@ export default function PerfStats() {
 
         const rows: RowData[] = dataRows.map((rawRow, i) => {
           const row = rawRow as RawCell[];
-          const obj: RowData = { _rowKey: i };
+          const obj = { _rowKey: i } as RowData;
           headers.forEach((header, colIdx) => {
             const cell = row[colIdx];
             obj[header] =

@@ -1,0 +1,54 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title {
+  margin: 0 !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  padding: 16px 20px;
+}
+
+.table {
+  :global(.ant-table-cell) {
+    white-space: nowrap;
+  }
+}
+
+.importErrors {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: #cf1322;
+
+  li {
+    margin: 4px 0;
+  }
+}

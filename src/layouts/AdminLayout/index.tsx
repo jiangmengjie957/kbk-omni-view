@@ -11,6 +11,10 @@ import {
   BarChartOutlined,
   ScheduleOutlined,
   PieChartOutlined,
+  DatabaseOutlined,
+  BankOutlined,
+  TeamOutlined,
+  IdcardOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -28,6 +32,7 @@ const SIDER_COLLAPSED_WIDTH = 64;
 const HEADER_HEIGHT = 64;
 
 const STATS_MENU_KEY = 'data-stats';
+const BASIC_DATA_MENU_KEY = 'basic-data';
 
 const menuItems: MenuProps['items'] = [
   {
@@ -57,6 +62,28 @@ const menuItems: MenuProps['items'] = [
       },
     ],
   },
+  {
+    key: BASIC_DATA_MENU_KEY,
+    icon: <DatabaseOutlined />,
+    label: '基础数据',
+    children: [
+      {
+        key: '/admin/campus',
+        icon: <BankOutlined />,
+        label: '校区管理',
+      },
+      {
+        key: '/admin/employee',
+        icon: <TeamOutlined />,
+        label: '员工管理',
+      },
+      {
+        key: '/admin/student',
+        icon: <IdcardOutlined />,
+        label: '学员管理',
+      },
+    ],
+  },
 ];
 
 const headerDropdownItems: MenuProps['items'] = [
@@ -79,16 +106,25 @@ export default function AdminLayout() {
   );
   const [openKeys, setOpenKeys] = useState<string[]>([STATS_MENU_KEY]);
 
-  // 路由切到统计子页时，确保“数据统计”子菜单展开
+  // 路由切到统计/基础数据子页时，确保对应父菜单展开
   useEffect(() => {
-    if (
-      location.pathname === '/admin/perf-stats' ||
-      location.pathname === '/admin/lesson-cancel-report' ||
-      location.pathname === '/admin/lesson-hour-stats'
-    ) {
-      setOpenKeys(prev =>
-        prev.includes(STATS_MENU_KEY) ? prev : [...prev, STATS_MENU_KEY]
-      );
+    const statsPaths = [
+      '/admin/perf-stats',
+      '/admin/lesson-cancel-report',
+      '/admin/lesson-hour-stats',
+    ];
+    const basicDataPaths = [
+      '/admin/campus',
+      '/admin/employee',
+      '/admin/student',
+    ];
+    let parentKey: string | null = null;
+    if (statsPaths.includes(location.pathname)) parentKey = STATS_MENU_KEY;
+    else if (basicDataPaths.includes(location.pathname)) parentKey = BASIC_DATA_MENU_KEY;
+
+    if (parentKey) {
+      const key = parentKey;
+      setOpenKeys(prev => (prev.includes(key) ? prev : [...prev, key]));
     }
   }, [location.pathname]);
 
