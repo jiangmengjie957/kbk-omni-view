@@ -1,3 +1,4 @@
+import { message } from 'antd';
 import { API_BASE, AUTH_STORAGE_KEY, AuthState } from '../config/auth';
 
 export class ApiError extends Error {
@@ -75,7 +76,7 @@ async function tryRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
-// 统一请求封装：自动带上 Authorization，401 时尝试刷新并重放一次
+// 统一请求封装：自动带 Authorization、统一弹错误提示、401 时尝试刷新并重放一次
 export async function request<T = unknown>(
   path: string,
   options: RequestInit = {},
@@ -90,7 +91,13 @@ export async function request<T = unknown>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch {
+    message.error('网络异常，请稍后重试');
+    throw new ApiError(0, 0, '网络异常，请稍后重试');
+  }
 
   let body: { code?: number; message?: string; data?: unknown } | null = null;
   try {
@@ -99,8 +106,9 @@ export async function request<T = unknown>(
     body = null;
   }
 
-  // 401 且未重试：刷新 token 后重放一次
-  if (res.status === 401 && !retried) {
+  // 401：仅当已登录（存在 refreshToken）时尝试刷新重放；
+  // 未登录的 401（如登录接口账号密码错误）直接走下方统一报错，不再触发跳转刷新页面
+  if (res.status === 401 && !retried && getRefreshToken()) {
     const ok = await tryRefresh();
     if (ok) {
       return request<T>(path, options, true);
@@ -111,7 +119,9 @@ export async function request<T = unknown>(
   }
 
   if (!res.ok) {
-    throw new ApiError(res.status, body?.code ?? res.status, body?.message ?? '请求失败');
+    const msg = body?.message ?? '请求失败';
+    message.error(msg);
+    throw new ApiError(res.status, body?.code ?? res.status, msg);
   }
 
   return body as T;

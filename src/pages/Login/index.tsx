@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { setAuthState } from '../../hooks/useAuth';
 import { login } from '../../api/auth';
-import { ApiError } from '../../api/client';
 import styles from './Login.module.scss';
 
 const { Title, Text } = Typography;
@@ -31,9 +30,8 @@ export default function Login() {
         res.data.mustChangePassword ? '/change-password' : '/admin',
         { replace: true }
       );
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : '登录失败，请稍后重试';
-      void messageApi.error(msg);
+    } catch {
+      // 错误已在公共请求层（client.ts）统一提示
     } finally {
       setLoading(false);
     }

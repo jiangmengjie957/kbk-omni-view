@@ -4,7 +4,6 @@ import { LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { changePassword } from '../../api/auth';
 import { getAuthState, setAuthState } from '../../hooks/useAuth';
-import { ApiError } from '../../api/client';
 import styles from './ChangePassword.module.scss';
 
 const { Title, Text } = Typography;
@@ -50,9 +49,8 @@ export default function ChangePassword() {
       }
       void messageApi.success('密码修改成功');
       void navigate('/admin', { replace: true });
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : '修改失败，请稍后重试';
-      void messageApi.error(msg);
+    } catch {
+      // 错误已在公共请求层（client.ts）统一提示
     } finally {
       setLoading(false);
     }
