@@ -1,37 +1,27 @@
-import { AUTH_STORAGE_KEY, AUTH_EXPIRE_MS } from '../config/auth';
+import { AUTH_STORAGE_KEY, AuthState } from '../config/auth';
 
-interface AuthData {
-  loggedIn: boolean;
-  expireAt: number;
-}
-
-export function getAuthState(): AuthData | null {
+export function getAuthState(): AuthState | null {
   try {
     const raw = localStorage.getItem(AUTH_STORAGE_KEY);
     if (!raw) return null;
-    const data: AuthData = JSON.parse(raw) as AuthData;
-    if (!data.loggedIn || Date.now() > data.expireAt) {
-      localStorage.removeItem(AUTH_STORAGE_KEY);
-      return null;
-    }
-    return data;
+    return JSON.parse(raw) as AuthState;
   } catch {
     return null;
   }
 }
 
-export function setAuthState(): void {
-  const data: AuthData = {
-    loggedIn: true,
-    expireAt: Date.now() + AUTH_EXPIRE_MS,
-  };
-  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(data));
+export function setAuthState(state: AuthState): void {
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(state));
 }
 
 export function clearAuthState(): void {
   localStorage.removeItem(AUTH_STORAGE_KEY);
 }
 
+export function getToken(): string {
+  return getAuthState()?.accessToken ?? '';
+}
+
 export function isAuthenticated(): boolean {
-  return getAuthState() !== null;
+  return getToken() !== '';
 }

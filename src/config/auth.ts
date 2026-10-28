@@ -1,9 +1,29 @@
-// 写死的登录凭据（演示/内网使用）
-export const AUTH_USERNAME = 'admin';
-export const AUTH_PASSWORD = 'kbk@2026';
+// 后端 API 基础地址
+// 开发环境直连本地后端；生产环境走 nginx 反代到同域 /api/v1
+export const API_BASE = import.meta.env.DEV
+  ? 'http://127.0.0.1:4001/api/v1'
+  : 'https://www.mengmenga.com/api/v1';
 
 // localStorage key
 export const AUTH_STORAGE_KEY = 'kbk_auth';
 
-// 会话有效期（300 天，毫秒）
-export const AUTH_EXPIRE_MS = 300 * 24 * 60 * 60 * 1000;
+export interface AuthUser {
+  userId: number;
+  employeeId: number;
+  employeeNo: string;
+  username: string;
+  name: string;
+  gender: number;
+  avatarUrl: string | null;
+  campusId: number;
+}
+
+export interface AuthState {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+  roles: string[];
+  isSuper: boolean;
+  dataScope: number;
+  mustChangePassword: boolean;
+}

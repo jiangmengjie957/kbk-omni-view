@@ -13,7 +13,8 @@ import {
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { clearAuthState } from '../../hooks/useAuth';
+import { clearAuthState, getAuthState } from '../../hooks/useAuth';
+import { logout } from '../../api/auth';
 import PageTransition from '../../components/PageTransition';
 import styles from './AdminLayout.module.scss';
 
@@ -61,6 +62,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = theme.useToken();
+  const userName = getAuthState()?.user?.name ?? '用户';
 
   function handleMenuClick({ key }: { key: string }) {
     void navigate(key);
@@ -68,6 +70,7 @@ export default function AdminLayout() {
 
   function handleHeaderDropdown({ key }: { key: string }) {
     if (key === 'logout') {
+      void logout().catch(() => {});
       clearAuthState();
       void navigate('/login', { replace: true });
     }
@@ -168,7 +171,7 @@ export default function AdminLayout() {
               onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.background = 'transparent')}
             >
               <Avatar size={32} icon={<UserOutlined />} style={{ background: token.colorPrimary }} />
-              <Text className={styles.userName}>管理员</Text>
+              <Text className={styles.userName}>{userName}</Text>
             </div>
           </Dropdown>
         </Header>

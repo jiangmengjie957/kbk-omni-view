@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { Form, Input, Button, message, Typography } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { AUTH_USERNAME, AUTH_PASSWORD } from '../../config/auth';
 import { setAuthState } from '../../hooks/useAuth';
+import { login } from '../../api/auth';
+import { ApiError } from '../../api/client';
 import styles from './Login.module.scss';
 
 const { Title, Text } = Typography;
@@ -17,13 +19,23 @@ export default function Login() {
   const navigate = useNavigate();
   const [form] = Form.useForm<LoginFormValues>();
   const [messageApi, contextHolder] = message.useMessage();
+  const [loading, setLoading] = useState(false);
 
-  function handleFinish({ username, password }: LoginFormValues) {
-    if (username === AUTH_USERNAME && password === AUTH_PASSWORD) {
-      setAuthState();
-      void navigate('/admin', { replace: true });
-    } else {
-      void messageApi.error('账号或密码错误，请重试');
+  async function handleFinish({ username, password }: LoginFormValues) {
+    setLoading(true);
+    try {
+      const res = await login({ username, password });
+      setAuthState(res.data);
+      void messageApi.success('登录成功');
+      void navigate(
+        res.data.mustChangePassword ? '/change-password' : '/admin',
+        { replace: true }
+      );
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : '登录失败，请稍后重试';
+      void messageApi.error(msg);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -46,7 +58,7 @@ export default function Login() {
             KBK 后台管理中心
           </Title>
           <Text type="secondary" className={styles.subtitle}>
-            请使用管理员账号登录
+            请使用账号登录
           </Text>
         </div>
 
@@ -84,6 +96,7 @@ export default function Login() {
               type="primary"
               htmlType="submit"
               block
+              loading={loading}
               className={styles.submitBtn}
             >
               登 录
