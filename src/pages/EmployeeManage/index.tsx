@@ -6,7 +6,6 @@ import {
   Form,
   Input,
   Select,
-  Popconfirm,
   Space,
   Tag,
   Typography,
@@ -59,6 +58,9 @@ export default function EmployeeManage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Employee | null>(null);
+  const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
+  const [deleting, setDeleting] = useState(false);
   const [form] = Form.useForm<EmployeeInput>();
 
   const campusName = useMemo(
@@ -129,10 +131,27 @@ export default function EmployeeManage() {
     }
   }
 
-  async function handleDelete(id: number) {
-    await employeeApi.remove(id);
-    message.success('已删除');
-    void refresh();
+  function openDelete(record: Employee) {
+    setDeleteTarget(record);
+    setDeleteStep(1);
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    // 第一次点击是「继续」进入二次确认，第二次才真正删除
+    if (deleteStep === 1) {
+      setDeleteStep(2);
+      return;
+    }
+    setDeleting(true);
+    try {
+      await employeeApi.remove(deleteTarget.id);
+      message.success('已删除');
+      setDeleteTarget(null);
+      void refresh();
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleImport(rows: Record<string, string>[]) {
@@ -213,11 +232,9 @@ export default function EmployeeManage() {
           <Button type="link" size="small" onClick={() => openEdit(record)}>
             编辑
           </Button>
-          <Popconfirm title="确定删除该员工吗？" onConfirm={() => handleDelete(record.id)}>
-            <Button type="link" size="small" danger>
-              删除
-            </Button>
-          </Popconfirm>
+          <Button type="link" size="small" danger onClick={() => openDelete(record)}>
+            删除
+          </Button>
         </Space>
       ),
     },
@@ -315,6 +332,31 @@ export default function EmployeeManage() {
             <Input.TextArea placeholder="备注" rows={3} maxLength={500} />
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={deleteStep === 1 ? '删除员工' : '再次确认删除'}
+        open={!!deleteTarget}
+        onOk={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        okText={deleteStep === 1 ? '继续' : '确认删除'}
+        cancelText={deleteStep === 1 ? '取消' : '返回'}
+        okButtonProps={{ danger: true }}
+        confirmLoading={deleting}
+        maskClosable={false}
+      >
+        {deleteStep === 1 ? (
+          <div>
+            删除员工「<strong>{deleteTarget?.name}</strong>」将
+            <strong>同步删除其登录账号</strong>
+            ，删除后该账号将无法再登录系统，相关数据不可恢复。请确认是否继续？
+          </div>
+        ) : (
+          <div>
+            您即将永久删除员工「<strong>{deleteTarget?.name}</strong>」及其登录账号，
+            此操作<strong>不可撤销</strong>。请再次确认是否删除？
+          </div>
+        )}
       </Modal>
     </div>
   );
