@@ -146,6 +146,7 @@ export default function CampusManage() {
         <Title level={4} className={styles.title}>
           校区管理
         </Title>
+        {/* 校区暂不支持新增/导入：当前仅一个校区（宝杨路），多校区上线后开放 */}
         <div className={styles.toolbar}>
           <ImportExcelButton
             title="校区"
@@ -153,8 +154,9 @@ export default function CampusManage() {
             headers={TEMPLATE_HEADERS}
             examples={TEMPLATE_EXAMPLES}
             onImport={handleImport}
+            disabled
           />
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate} disabled>
             新增校区
           </Button>
         </div>

@@ -27,7 +27,6 @@ import styles from '../BasicData.module.scss';
 const { Title } = Typography;
 
 const TEMPLATE_HEADERS = [
-  '工号',
   '姓名',
   '性别',
   '岗位',
@@ -38,7 +37,7 @@ const TEMPLATE_HEADERS = [
   '备注',
 ];
 const TEMPLATE_EXAMPLES = [
-  ['E001', '张三', '男', '教师', '宝杨路校区', '13800000000', '2026-01-01', '在职', ''],
+  ['张三', '男', '教师', '宝杨路校区', '13800000000', '2026-01-01', '在职', ''],
 ];
 
 function mapGender(text: string): 1 | 2 | null {
@@ -105,7 +104,6 @@ export default function EmployeeManage() {
   async function handleSubmit() {
     const values = await form.validateFields();
     const payload: EmployeeInput = {
-      employeeNo: values.employeeNo.trim(),
       name: values.name.trim(),
       gender: values.gender,
       position: values.position,
@@ -159,14 +157,9 @@ export default function EmployeeManage() {
     const errors: string[] = [];
     rows.forEach((row, idx) => {
       const line = idx + 2;
-      const employeeNo = (row['工号'] ?? '').trim();
       const name = (row['姓名'] ?? '').trim();
       const gender = mapGender((row['性别'] ?? '').trim());
       const position = (row['岗位'] ?? '').trim();
-      if (!employeeNo) {
-        errors.push(`第 ${line} 行：工号为空`);
-        return;
-      }
       if (!name) {
         errors.push(`第 ${line} 行：姓名为空`);
         return;
@@ -181,7 +174,6 @@ export default function EmployeeManage() {
       }
       const campusText = (row['所属校区'] ?? '').trim();
       items.push({
-        employeeNo,
         name,
         gender,
         position,
@@ -281,13 +273,6 @@ export default function EmployeeManage() {
         maskClosable={false}
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="employeeNo"
-            label="工号"
-            rules={[{ required: true, message: '请输入工号' }]}
-          >
-            <Input placeholder="工号" maxLength={30} />
-          </Form.Item>
           <Form.Item
             name="name"
             label="姓名"

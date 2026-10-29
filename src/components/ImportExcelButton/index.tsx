@@ -19,6 +19,7 @@ export interface ImportExcelButtonProps {
   headers: string[];
   examples?: (string | number)[][];
   buttonText?: string;
+  disabled?: boolean;
   onImport: (rows: Record<string, string>[]) => Promise<ImportResult>;
 }
 
@@ -28,6 +29,7 @@ export default function ImportExcelButton({
   headers,
   examples = [],
   buttonText = '导入',
+  disabled = false,
   onImport,
 }: ImportExcelButtonProps) {
   const [open, setOpen] = useState(false);
@@ -63,12 +65,13 @@ export default function ImportExcelButton({
 
   return (
     <>
-      <Button icon={<UploadOutlined />} onClick={openModal}>
+      <Button icon={<UploadOutlined />} onClick={openModal} disabled={disabled}>
         {buttonText}
       </Button>
       <Button
         icon={<DownloadOutlined />}
         onClick={() => downloadTemplate(templateFilename, headers, examples)}
+        disabled={disabled}
       >
         下载模板
       </Button>

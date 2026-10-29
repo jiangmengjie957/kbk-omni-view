@@ -14,7 +14,8 @@ interface ApiResponse<T> {
 }
 
 export type CampusInput = Omit<Campus, 'id' | 'createdAt'>;
-export type EmployeeInput = Omit<Employee, 'id' | 'createdAt'>;
+// 工号由后端自动生成，前端不传入，故从入参类型中排除
+export type EmployeeInput = Omit<Employee, 'id' | 'createdAt' | 'employeeNo'>;
 export type StudentInput = Omit<Student, 'id' | 'createdAt'>;
 
 function list<T>(path: string): Promise<T[]> {
