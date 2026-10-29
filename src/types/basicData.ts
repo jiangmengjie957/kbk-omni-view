@@ -51,17 +51,14 @@ export const GENDER_OPTIONS = [
   { value: 2, label: '女' },
 ] as const;
 
-// 员工岗位列表
+// 员工岗位列表（与后端 employee.job_type 枚举一一对应）
 export const POSITIONS = [
-  '校长',
-  '教学主管',
-  '教师',
   '班主任',
+  '教师',
   '教务',
-  '课程顾问',
-  '招生顾问',
-  '行政',
-  '财务',
+  '校长',
+  '管理员',
+  '其他',
 ];
 
 // 学员年级列表

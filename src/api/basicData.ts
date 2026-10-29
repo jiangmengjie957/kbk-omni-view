@@ -1,143 +1,77 @@
+import { request } from './client';
 import type { Campus, Employee, Student } from '../types/basicData';
 
 // ─────────────────────────────────────────────────────────────
-// 基础数据 mock 层（localStorage 持久化）
-// 后端接口就绪后，把下面每个方法体替换为 request('/api/v1/...') 即可，
-// 页面无需改动。
+// 基础数据接口（已联调后端）
+// GET/POST /api/v1/{resource}，PUT/DELETE /api/v1/{resource}/:id，
+// POST /api/v1/{resource}/batch 批量导入
 // ─────────────────────────────────────────────────────────────
 
-const STORAGE_KEYS = {
-  campus: 'kbk_campus',
-  employee: 'kbk_employee',
-  student: 'kbk_student',
-} as const;
-
-function readList<T>(key: string): T[] {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T[]) : [];
-  } catch {
-    return [];
-  }
+interface ApiResponse<T> {
+  code: number;
+  message: string;
+  data: T;
 }
-
-function writeList<T>(key: string, list: T[]): void {
-  localStorage.setItem(key, JSON.stringify(list));
-}
-
-function nextId(list: { id: number }[]): number {
-  return list.reduce((max, item) => Math.max(max, item.id), 0) + 1;
-}
-
-function now(): string {
-  return new Date().toISOString();
-}
-
-async function listAll<T>(key: string): Promise<T[]> {
-  return readList<T>(key);
-}
-
-async function createOne<T extends { id: number; createdAt: string }>(
-  key: string,
-  data: Omit<T, 'id' | 'createdAt'>
-): Promise<T> {
-  const list = readList<T>(key);
-  const item = { ...data, id: nextId(list), createdAt: now() } as T;
-  writeList(key, [...list, item]);
-  return item;
-}
-
-async function updateOne<T extends { id: number }>(
-  key: string,
-  id: number,
-  data: Partial<Omit<T, 'id'>>
-): Promise<T> {
-  const list = readList<T>(key);
-  const index = list.findIndex((item) => item.id === id);
-  if (index === -1) throw new Error('记录不存在');
-  const updated = { ...list[index], ...data, id } as T;
-  list[index] = updated;
-  writeList(key, list);
-  return updated;
-}
-
-async function deleteOne<T extends { id: number }>(key: string, id: number): Promise<void> {
-  const list = readList<T>(key);
-  writeList(key, list.filter((item) => item.id !== id));
-}
-
-async function batchCreate<T extends { id: number; createdAt: string }>(
-  key: string,
-  items: Omit<T, 'id' | 'createdAt'>[]
-): Promise<T[]> {
-  const list = readList<T>(key);
-  let id = nextId(list);
-  const created = items.map((data) => {
-    const item = { ...data, id: id++, createdAt: now() } as T;
-    list.push(item);
-    return item;
-  });
-  writeList(key, list);
-  return created;
-}
-
-// 首次使用预置一个默认校区
-function ensureSeed(): void {
-  const campus = readList<Campus>(STORAGE_KEYS.campus);
-  if (campus.length === 0) {
-    writeList<Campus>(STORAGE_KEYS.campus, [
-      {
-        id: 1,
-        name: '宝杨路校区',
-        address: '',
-        phone: '',
-        status: 1,
-        remark: '',
-        createdAt: now(),
-      },
-    ]);
-  }
-}
-ensureSeed();
-
-// ── 类型 ─────────────────────────────────────────────────────
 
 export type CampusInput = Omit<Campus, 'id' | 'createdAt'>;
 export type EmployeeInput = Omit<Employee, 'id' | 'createdAt'>;
 export type StudentInput = Omit<Student, 'id' | 'createdAt'>;
 
+function list<T>(path: string): Promise<T[]> {
+  return request<ApiResponse<T[]>>(path).then((r) => r.data);
+}
+
+function create<T>(path: string, data: unknown): Promise<T> {
+  return request<ApiResponse<T>>(path, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }).then((r) => r.data);
+}
+
+function update<T>(path: string, data: unknown): Promise<T> {
+  return request<ApiResponse<T>>(path, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }).then((r) => r.data);
+}
+
+function remove(path: string): Promise<void> {
+  return request<ApiResponse<unknown>>(path, { method: 'DELETE' }).then(() => undefined);
+}
+
+function batch(path: string, items: unknown[]): Promise<void> {
+  return request<ApiResponse<{ count: number }>>(path, {
+    method: 'POST',
+    body: JSON.stringify(items),
+  }).then(() => undefined);
+}
+
 // ── 校区 ─────────────────────────────────────────────────────
 
 export const campusApi = {
-  list: () => listAll<Campus>(STORAGE_KEYS.campus),
-  create: (data: CampusInput) => createOne<Campus>(STORAGE_KEYS.campus, data),
-  update: (id: number, data: Partial<CampusInput>) =>
-    updateOne<Campus>(STORAGE_KEYS.campus, id, data),
-  remove: (id: number) => deleteOne<Campus>(STORAGE_KEYS.campus, id),
-  batchCreate: (items: CampusInput[]) =>
-    batchCreate<Campus>(STORAGE_KEYS.campus, items),
+  list: () => list<Campus>('/campus'),
+  create: (data: CampusInput) => create<Campus>('/campus', data),
+  update: (id: number, data: Partial<CampusInput>) => update<Campus>(`/campus/${id}`, data),
+  remove: (id: number) => remove(`/campus/${id}`),
+  batchCreate: (items: CampusInput[]) => batch('/campus/batch', items),
 };
 
 // ── 员工 ─────────────────────────────────────────────────────
 
 export const employeeApi = {
-  list: () => listAll<Employee>(STORAGE_KEYS.employee),
-  create: (data: EmployeeInput) => createOne<Employee>(STORAGE_KEYS.employee, data),
-  update: (id: number, data: Partial<EmployeeInput>) =>
-    updateOne<Employee>(STORAGE_KEYS.employee, id, data),
-  remove: (id: number) => deleteOne<Employee>(STORAGE_KEYS.employee, id),
-  batchCreate: (items: EmployeeInput[]) =>
-    batchCreate<Employee>(STORAGE_KEYS.employee, items),
+  list: () => list<Employee>('/employee'),
+  create: (data: EmployeeInput) => create<Employee>('/employee', data),
+  update: (id: number, data: Partial<EmployeeInput>) => update<Employee>(`/employee/${id}`, data),
+  remove: (id: number) => remove(`/employee/${id}`),
+  batchCreate: (items: EmployeeInput[]) => batch('/employee/batch', items),
 };
 
 // ── 学员 ─────────────────────────────────────────────────────
 
 export const studentApi = {
-  list: () => listAll<Student>(STORAGE_KEYS.student),
-  create: (data: StudentInput) => createOne<Student>(STORAGE_KEYS.student, data),
-  update: (id: number, data: Partial<StudentInput>) =>
-    updateOne<Student>(STORAGE_KEYS.student, id, data),
-  remove: (id: number) => deleteOne<Student>(STORAGE_KEYS.student, id),
-  batchCreate: (items: StudentInput[]) =>
-    batchCreate<Student>(STORAGE_KEYS.student, items),
+  list: () => list<Student>('/student'),
+  create: (data: StudentInput) => create<Student>('/student', data),
+  update: (id: number, data: Partial<StudentInput>) => update<Student>(`/student/${id}`, data),
+  remove: (id: number) => remove(`/student/${id}`),
+  batchCreate: (items: StudentInput[]) => batch('/student/batch', items),
 };
