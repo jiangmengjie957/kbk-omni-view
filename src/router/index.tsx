@@ -9,6 +9,7 @@ import LessonHourStats from "../pages/LessonHourStats";
 import CampusManage from "../pages/CampusManage";
 import EmployeeManage from "../pages/EmployeeManage";
 import StudentManage from "../pages/StudentManage";
+import ClassroomManage from "../pages/ClassroomManage";
 
 const router = createBrowserRouter(
   [
@@ -59,6 +60,10 @@ const router = createBrowserRouter(
         {
           path: "student",
           element: <StudentManage />,
+        },
+        {
+          path: "classroom",
+          element: <ClassroomManage />,
         },
       ],
     },

@@ -44,6 +44,22 @@ export interface Student {
   createdAt: string;
 }
 
+// ── 教室 ──────────────────────────────────────────────
+export interface Classroom {
+  id: number;
+  campusId: number | null; // 所属校区
+  roomNo: string; // 教室编号（必填）
+  roomName: string; // 教室名称（必填）
+  capacity: number; // 容量
+  roomType: number; // 类型
+  floor: string; // 楼层
+  equipment: string; // 设备说明
+  status: number; // 1 启用 2 停用 3 维修中
+  sort: number; // 排序号
+  remark: string; // 备注
+  createdAt: string;
+}
+
 // ── 常量（前端写死）────────────────────────────────────
 
 export const GENDER_OPTIONS = [
@@ -91,4 +107,20 @@ export const STUDENT_STATUS_OPTIONS = [
   { value: 1, label: '在读' },
   { value: 0, label: '停课' },
   { value: 2, label: '结业' },
+] as const;
+
+// 教室类型（与后端 classroom.room_type 枚举一致）
+export const ROOM_TYPE_OPTIONS = [
+  { value: 1, label: '普通' },
+  { value: 2, label: '一对一' },
+  { value: 3, label: '多媒体' },
+  { value: 4, label: '实验室' },
+  { value: 5, label: '其他' },
+] as const;
+
+// 教室状态（与后端 classroom.status 枚举一致）
+export const CLASSROOM_STATUS_OPTIONS = [
+  { value: 1, label: '启用' },
+  { value: 2, label: '停用' },
+  { value: 3, label: '维修中' },
 ] as const;

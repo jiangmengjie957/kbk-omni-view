@@ -15,6 +15,7 @@ import {
   BankOutlined,
   TeamOutlined,
   IdcardOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -82,6 +83,11 @@ const menuItems: MenuProps['items'] = [
         icon: <IdcardOutlined />,
         label: '学员管理',
       },
+      {
+        key: '/admin/classroom',
+        icon: <AppstoreOutlined />,
+        label: '教室管理',
+      },
     ],
   },
 ];
@@ -117,6 +123,7 @@ export default function AdminLayout() {
       '/admin/campus',
       '/admin/employee',
       '/admin/student',
+      '/admin/classroom',
     ];
     let parentKey: string | null = null;
     if (statsPaths.includes(location.pathname)) parentKey = STATS_MENU_KEY;

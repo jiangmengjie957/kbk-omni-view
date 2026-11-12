@@ -1,5 +1,5 @@
 import { request } from './client';
-import type { Campus, Employee, Student } from '../types/basicData';
+import type { Campus, Classroom, Employee, Student } from '../types/basicData';
 
 // ─────────────────────────────────────────────────────────────
 // 基础数据接口（已联调后端）
@@ -17,6 +17,7 @@ export type CampusInput = Omit<Campus, 'id' | 'createdAt'>;
 // 工号由后端自动生成，前端不传入，故从入参类型中排除
 export type EmployeeInput = Omit<Employee, 'id' | 'createdAt' | 'employeeNo'>;
 export type StudentInput = Omit<Student, 'id' | 'createdAt'>;
+export type ClassroomInput = Omit<Classroom, 'id' | 'createdAt'>;
 
 function list<T>(path: string): Promise<T[]> {
   return request<ApiResponse<T[]>>(path).then((r) => r.data);
@@ -75,4 +76,14 @@ export const studentApi = {
   update: (id: number, data: Partial<StudentInput>) => update<Student>(`/student/${id}`, data),
   remove: (id: number) => remove(`/student/${id}`),
   batchCreate: (items: StudentInput[]) => batch('/student/batch', items),
+};
+
+// ── 教室 ─────────────────────────────────────────────────────
+
+export const classroomApi = {
+  list: () => list<Classroom>('/classroom'),
+  create: (data: ClassroomInput) => create<Classroom>('/classroom', data),
+  update: (id: number, data: Partial<ClassroomInput>) => update<Classroom>(`/classroom/${id}`, data),
+  remove: (id: number) => remove(`/classroom/${id}`),
+  batchCreate: (items: ClassroomInput[]) => batch('/classroom/batch', items),
 };
