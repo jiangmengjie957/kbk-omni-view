@@ -23,3 +23,15 @@ export function RedirectIfAuth({ children }: Props) {
   }
   return <>{children}</>;
 }
+
+// 权限守卫：缺少指定权限点时跳回 /admin
+export function RequirePermission({
+  permission,
+  children,
+}: Props & { permission: string }) {
+  const auth = getAuthState();
+  if (!auth?.permissions?.includes(permission)) {
+    return <Navigate to="/admin" replace />;
+  }
+  return <>{children}</>;
+}

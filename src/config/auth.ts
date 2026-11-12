@@ -25,5 +25,6 @@ export interface AuthState {
   roles: string[];
   isSuper: boolean;
   dataScope: number;
+  permissions: string[];
   mustChangePassword: boolean;
 }

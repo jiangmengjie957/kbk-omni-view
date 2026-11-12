@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { RequireAuth, RedirectIfAuth } from "./PrivateRoute";
+import { RequireAuth, RedirectIfAuth, RequirePermission } from "./PrivateRoute";
 import AdminLayout from "../layouts/AdminLayout";
 import Login from "../pages/Login";
 import Welcome from "../pages/Welcome";
@@ -10,6 +10,7 @@ import CampusManage from "../pages/CampusManage";
 import EmployeeManage from "../pages/EmployeeManage";
 import StudentManage from "../pages/StudentManage";
 import ClassroomManage from "../pages/ClassroomManage";
+import ScheduleManage from "../pages/ScheduleManage";
 
 const router = createBrowserRouter(
   [
@@ -51,19 +52,39 @@ const router = createBrowserRouter(
         },
         {
           path: "campus",
-          element: <CampusManage />,
+          element: (
+            <RequirePermission permission="basic-data">
+              <CampusManage />
+            </RequirePermission>
+          ),
         },
         {
           path: "employee",
-          element: <EmployeeManage />,
+          element: (
+            <RequirePermission permission="basic-data">
+              <EmployeeManage />
+            </RequirePermission>
+          ),
         },
         {
           path: "student",
-          element: <StudentManage />,
+          element: (
+            <RequirePermission permission="basic-data">
+              <StudentManage />
+            </RequirePermission>
+          ),
         },
         {
           path: "classroom",
-          element: <ClassroomManage />,
+          element: (
+            <RequirePermission permission="basic-data">
+              <ClassroomManage />
+            </RequirePermission>
+          ),
+        },
+        {
+          path: "schedule",
+          element: <ScheduleManage />,
         },
       ],
     },

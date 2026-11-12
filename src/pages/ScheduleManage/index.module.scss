@@ -1,0 +1,363 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.pageHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.title {
+  margin: 0 !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+}
+
+.weekRange {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.toolbarRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hint {
+  font-size: 13px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  padding: 0;
+}
+
+.gridWrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+// 固定列宽：教师列 130px，每个时间格 100px（共 7 天 × 6 时段 = 42 格）
+.grid {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: max-content;
+  min-width: 100%;
+
+  th,
+  td {
+    border: 1px solid #e8e8e8;
+    padding: 0;
+    text-align: center;
+    vertical-align: middle;
+    box-sizing: border-box;
+  }
+}
+
+.colTeacher {
+  width: 130px;
+  min-width: 130px;
+  max-width: 130px;
+}
+
+.colSlot {
+  width: 100px;
+  min-width: 100px;
+  max-width: 100px;
+}
+
+// 表头三行：日期 → 星期 → 时间段
+.dateHead {
+  background: #fafafa;
+  font-weight: 600;
+  color: #262626;
+  font-size: 14px;
+  padding: 8px 4px !important;
+  white-space: nowrap;
+}
+
+.weekHead {
+  background: #fafafa;
+  color: #8c8c8c;
+  font-size: 12px;
+  padding: 4px !important;
+  white-space: nowrap;
+}
+
+.slotHead {
+  background: #fafafa;
+  color: #595959;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 2px !important;
+  white-space: nowrap;
+}
+
+.corner {
+  background: #fafafa;
+  color: #8c8c8c;
+  font-weight: 500;
+  font-size: 13px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+}
+
+// 教师列（左侧首列，固定，滑动时保持可见）
+.teacherCell {
+  background: #fafafa;
+  padding: 8px !important;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+
+.teacherName {
+  font-size: 14px;
+  font-weight: 600;
+  color: #262626;
+  line-height: 1.3;
+}
+
+.lessonCell {
+  height: 68px;
+  padding: 3px !important;
+  position: relative;
+}
+
+.cellInner {
+  position: relative;
+  height: 100%;
+  min-height: 60px;
+}
+
+// 完全在标准时段之外的极特殊课程：以小块占据格子一部分
+.specialBlock {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  z-index: 2;
+  background: #fde3cf;
+  border: 1px solid #ffb37a;
+  border-left: 3px solid #fa8c16;
+  border-radius: 4px;
+  padding: 2px 4px;
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 12px;
+
+  &:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+    border-color: #fa8c16;
+  }
+}
+
+.specialTime {
+  font-size: 10px;
+  color: #d46b08;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.specialStudent {
+  font-size: 10px;
+  color: #874d00;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emptyCell {
+  height: 100%;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #d9d9d9;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 4px;
+
+  &:hover {
+    background: #f5f8ff;
+    color: #1677ff;
+  }
+}
+
+// 课程卡片（教室号展示在课内，不在教师名下）
+.lessonCard {
+  background: #f0f6ff;
+  border: 1px solid #d6e6ff;
+  border-radius: 4px;
+  padding: 4px 6px;
+  height: 100%;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  transition: box-shadow 0.2s, border-color 0.2s;
+
+  &:hover {
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    border-color: #91caff;
+  }
+}
+
+.pending {
+  background: #fffbe6;
+  border-color: #ffe58f;
+}
+
+.grade {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1677ff;
+  line-height: 1.3;
+}
+
+.students {
+  font-size: 12px;
+  color: #262626;
+  line-height: 1.3;
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studentOff {
+  color: #fa8c16;
+}
+
+// 课程详情：学生出勤状态列表
+.studentList {
+  margin-top: 14px;
+}
+
+.studentListTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #262626;
+  margin-bottom: 8px;
+}
+
+.studentItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f0f0;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.studentItemName {
+  font-size: 14px;
+  color: #262626;
+}
+
+.metaRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.classroom {
+  font-size: 11px;
+  color: #8c8c8c;
+  background: #e6f4ff;
+  padding: 0 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.note {
+  font-size: 11px;
+  color: #8c8c8c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusTag {
+  font-size: 10px !important;
+  line-height: 1 !important;
+  padding: 0 4px !important;
+}
+
+// 课程详情：添加学生
+.addStudent {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+
+  :global(.ant-input) {
+    flex: 1;
+  }
+}
+
+// 审批列表
+.approvalList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.approvalItem {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.approvalTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.approvalMeta {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+}
+
+.approvalChange {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #fffbe6;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.approvalReason {
+  margin-top: 4px;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
+.approvalActions {
+  margin-top: 10px;
+}

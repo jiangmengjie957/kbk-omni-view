@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Layout, Menu, Dropdown, Avatar, Typography, theme } from 'antd';
 import type { MenuProps } from 'antd';
 import {
@@ -16,6 +16,7 @@ import {
   TeamOutlined,
   IdcardOutlined,
   AppstoreOutlined,
+  CalendarOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
@@ -34,6 +35,11 @@ const HEADER_HEIGHT = 64;
 
 const STATS_MENU_KEY = 'data-stats';
 const BASIC_DATA_MENU_KEY = 'basic-data';
+
+// 菜单 key -> 所需权限点（权限点由后端下发，前端不硬编码角色枚举）
+const MENU_PERMISSION_REQUIREMENTS: Record<string, string> = {
+  [BASIC_DATA_MENU_KEY]: 'basic-data',
+};
 
 const menuItems: MenuProps['items'] = [
   {
@@ -90,6 +96,11 @@ const menuItems: MenuProps['items'] = [
       },
     ],
   },
+  {
+    key: '/admin/schedule',
+    icon: <CalendarOutlined />,
+    label: '排课管理',
+  },
 ];
 
 const headerDropdownItems: MenuProps['items'] = [
@@ -111,6 +122,22 @@ export default function AdminLayout() {
     () => getAuthState()?.mustChangePassword === true
   );
   const [openKeys, setOpenKeys] = useState<string[]>([STATS_MENU_KEY]);
+
+  // 当前用户权限点（登录时由后端写入 localStorage）
+  const permissions = useMemo(() => getAuthState()?.permissions ?? [], []);
+
+  // 过滤无权限的菜单项
+  const visibleMenuItems = useMemo(
+    () =>
+      (menuItems ?? []).filter((item) => {
+        if (!item) return false;
+        const key = (item as { key?: string }).key;
+        if (!key) return true;
+        const required = MENU_PERMISSION_REQUIREMENTS[key];
+        return !required || permissions.includes(required);
+      }),
+    [permissions]
+  );
 
   // 路由切到统计/基础数据子页时，确保对应父菜单展开
   useEffect(() => {
@@ -198,7 +225,7 @@ export default function AdminLayout() {
             selectedKeys={[location.pathname]}
             openKeys={openKeys}
             onOpenChange={setOpenKeys}
-            items={menuItems}
+            items={visibleMenuItems}
             onClick={handleMenuClick}
             className={styles.menu}
           />
