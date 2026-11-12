@@ -15,9 +15,9 @@ import {
 } from 'antd';
 import type { TableColumnsType } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { campusApi, classroomApi } from '../../api/basicData';
+import { campusApi, classroomApi, employeeApi } from '../../api/basicData';
 import type { ClassroomInput } from '../../api/basicData';
-import type { Campus, Classroom } from '../../types/basicData';
+import type { Campus, Classroom, Employee } from '../../types/basicData';
 import { ROOM_TYPE_OPTIONS, CLASSROOM_STATUS_OPTIONS } from '../../types/basicData';
 import ImportExcelButton from '../../components/ImportExcelButton';
 import styles from '../BasicData.module.scss';
@@ -33,11 +33,12 @@ const TEMPLATE_HEADERS = [
   '楼层',
   '设备',
   '状态',
+  '负责人',
   '排序',
   '备注',
 ];
 const TEMPLATE_EXAMPLES = [
-  ['宝杨路校区', '101', '一号教室', '普通', '30', '1楼', '投影仪', '启用', '1', ''],
+  ['宝杨路校区', '101', '一号教室', '普通', '30', '1楼', '投影仪', '启用', '张三', '1', ''],
 ];
 
 const ROOM_TYPE_LABEL: Record<number, string> = {
@@ -84,6 +85,7 @@ function toInt(v: string): number {
 export default function ClassroomManage() {
   const [list, setList] = useState<Classroom[]>([]);
   const [campuses, setCampuses] = useState<Campus[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Classroom | null>(null);
@@ -98,16 +100,26 @@ export default function ClassroomManage() {
     () => new Map(campuses.map((c) => [c.name, c.id])),
     [campuses]
   );
+  const employeeName = useMemo(
+    () => new Map(employees.map((e) => [e.id, e.name])),
+    [employees]
+  );
+  const employeeByName = useMemo(
+    () => new Map(employees.map((e) => [e.name, e.id])),
+    [employees]
+  );
 
   async function refresh() {
     setLoading(true);
     try {
-      const [rooms, camps] = await Promise.all([
+      const [rooms, camps, emps] = await Promise.all([
         classroomApi.list(),
         campusApi.list(),
+        employeeApi.list(),
       ]);
       setList(rooms);
       setCampuses(camps);
+      setEmployees(emps);
     } finally {
       setLoading(false);
     }
@@ -140,6 +152,7 @@ export default function ClassroomManage() {
       floor: (values.floor ?? '').trim(),
       equipment: (values.equipment ?? '').trim(),
       status: values.status ?? 1,
+      managerEmployeeId: values.managerEmployeeId ?? null,
       sort: values.sort ?? 0,
       remark: (values.remark ?? '').trim(),
     };
@@ -181,6 +194,7 @@ export default function ClassroomManage() {
         return;
       }
       const campusText = (row['校区'] ?? '').trim();
+      const managerText = (row['负责人'] ?? '').trim();
       items.push({
         campusId: campusText ? (campusByName.get(campusText) ?? null) : null,
         roomNo,
@@ -190,6 +204,7 @@ export default function ClassroomManage() {
         floor: (row['楼层'] ?? '').trim(),
         equipment: (row['设备'] ?? '').trim(),
         status: mapStatus(row['状态'] ?? ''),
+        managerEmployeeId: managerText ? (employeeByName.get(managerText) ?? null) : null,
         sort: toInt(row['排序'] ?? ''),
         remark: (row['备注'] ?? '').trim(),
       });
@@ -223,6 +238,12 @@ export default function ClassroomManage() {
       key: 'status',
       width: 90,
       render: (v: number) => <Tag color={ROOM_STATUS_COLOR[v] ?? 'default'}>{ROOM_STATUS_LABEL[v] ?? '-'}</Tag>,
+    },
+    {
+      title: '负责人',
+      dataIndex: 'managerEmployeeId',
+      key: 'managerEmployeeId',
+      render: (v: Classroom['managerEmployeeId']) => (v == null ? '-' : employeeName.get(v) ?? '-'),
     },
     { title: '排序', dataIndex: 'sort', key: 'sort', width: 70 },
     { title: '备注', dataIndex: 'remark', key: 'remark', render: (v: string) => v || '-' },
@@ -324,6 +345,13 @@ export default function ClassroomManage() {
           </Form.Item>
           <Form.Item name="status" label="状态" initialValue={1}>
             <Select options={[...CLASSROOM_STATUS_OPTIONS]} />
+          </Form.Item>
+          <Form.Item name="managerEmployeeId" label="教室负责人">
+            <Select
+              allowClear
+              placeholder="请选择"
+              options={employees.map((e) => ({ value: e.id, label: e.name }))}
+            />
           </Form.Item>
           <Form.Item name="sort" label="排序">
             <InputNumber min={0} style={{ width: '100%' }} placeholder="排序号" />

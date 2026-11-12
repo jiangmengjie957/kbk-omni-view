@@ -55,6 +55,7 @@ export interface Classroom {
   floor: string; // 楼层
   equipment: string; // 设备说明
   status: number; // 1 启用 2 停用 3 维修中
+  managerEmployeeId: number | null; // 教室负责人
   sort: number; // 排序号
   remark: string; // 备注
   createdAt: string;
