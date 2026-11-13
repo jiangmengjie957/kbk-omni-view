@@ -268,6 +268,10 @@ export default function ScheduleManage() {
 
   const [saving, setSaving] = useState(false);
 
+  // 非管理员删除课程走工单审批：删除原因弹窗
+  const [deleteReasonOpen, setDeleteReasonOpen] = useState(false);
+  const [deleteReason, setDeleteReason] = useState('');
+
   const [form] = Form.useForm();
   const [transferForm] = Form.useForm();
 
@@ -366,6 +370,8 @@ export default function ScheduleManage() {
 
   useEffect(() => {
     void refresh();
+    // 审批人页面加载时即拉取工单，保证待审批角标/列表可见
+    void refreshTransfers().catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -578,10 +584,36 @@ export default function ScheduleManage() {
   }
 
   async function handleDelete(id: number) {
-    await lessonApi.remove(id);
-    message.success('已删除');
-    setDetailLesson(null);
-    await refreshLessons();
+    // 管理员直接删除；非管理员弹出删除原因，提交工单审批
+    if (isAdminUser) {
+      await lessonApi.remove(id);
+      message.success('已删除');
+      setDetailLesson(null);
+      await refreshLessons();
+      return;
+    }
+    setDeleteReason('');
+    setDeleteReasonOpen(true);
+  }
+
+  async function submitDelete() {
+    if (!detailLesson) return;
+    if (!deleteReason.trim()) {
+      message.warning('请填写删除原因');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await lessonApi.remove(detailLesson.id, deleteReason.trim());
+      setDeleteReasonOpen(false);
+      setDeleteReason('');
+      setDetailLesson(null);
+      message.success(res.pending ? '已提交删除申请，等待审批' : '已删除');
+      await refreshLessons();
+      await refreshTransfers();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateStudentStatus(lessonId: number, studentId: number, status: StudentLessonStatus) {
@@ -876,9 +908,15 @@ export default function ScheduleManage() {
                 </Button>
               )}
               <Button onClick={() => openEdit(detailLesson)}>编辑</Button>
-              <Popconfirm title="确定删除该课程吗？" onConfirm={() => handleDelete(detailLesson.id)}>
-                <Button danger>删除</Button>
-              </Popconfirm>
+              {isAdminUser ? (
+                <Popconfirm title="确定删除该课程吗？" onConfirm={() => handleDelete(detailLesson.id)}>
+                  <Button danger>删除</Button>
+                </Popconfirm>
+              ) : (
+                <Button danger onClick={() => handleDelete(detailLesson.id)}>
+                  删除
+                </Button>
+              )}
             </Space>
           </>
         )}
@@ -1177,6 +1215,32 @@ export default function ScheduleManage() {
             message="非管理员排课调整需管理员/教务审批，审批通过后方可生效。"
           />
         </Form>
+      </Modal>
+
+      {/* 非管理员删除课程：提交工单审批 */}
+      <Modal
+        title="删除课程（需审批）"
+        open={deleteReasonOpen}
+        onOk={submitDelete}
+        onCancel={() => setDeleteReasonOpen(false)}
+        okText="提交审批"
+        confirmLoading={saving}
+        maskClosable={false}
+        zIndex={1200}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message="非管理员删除课程需提交工单审批，审批通过后课程才会被删除。"
+        />
+        <Input.TextArea
+          value={deleteReason}
+          onChange={(e) => setDeleteReason(e.target.value)}
+          placeholder="请填写删除原因"
+          rows={3}
+          maxLength={200}
+        />
       </Modal>
 
       {/* 排课/调课工单审批 */}

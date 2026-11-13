@@ -34,10 +34,11 @@ export const lessonApi = {
       body: JSON.stringify(data),
     }).then((r) => r.data),
 
-  remove: (id: number) =>
-    request<ApiResponse<unknown>>(`/lesson/${id}`, { method: 'DELETE' }).then(
-      () => undefined
-    ),
+  remove: (id: number, reason?: string) =>
+    request<ApiResponse<{ pending: boolean }>>(`/lesson/${id}`, {
+      method: 'DELETE',
+      ...(reason ? { body: JSON.stringify({ reason }) } : {}),
+    }).then((r) => r.data),
 
   // 更新单个学生上课状态
   updateStudentStatus: (lessonId: number, studentId: number, status: number) =>
