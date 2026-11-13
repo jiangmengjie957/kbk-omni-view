@@ -5,6 +5,31 @@
   min-width: 0;
 }
 
+// 全屏模式：铺满视口，表格区域撑满剩余高度
+.fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #f5f5f5;
+  padding: 16px;
+  overflow: hidden;
+  gap: 12px;
+
+  .card {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .gridWrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    max-height: none;
+  }
+}
+
 .pageHeader {
   display: flex;
   align-items: center;
@@ -47,6 +72,9 @@
 .gridWrap {
   overflow-x: auto;
   max-width: 100%;
+  // 普通模式下也限制高度，纵向滚动时表头固定
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
 }
 
 // 固定列宽：教师列 130px，每个时间格 100px（共 7 天 × 6 时段 = 42 格）
@@ -79,21 +107,30 @@
 }
 
 // 表头三行：日期 → 星期 → 时间段
+// 全部设为 sticky，纵向滚动时表头始终固定在顶部（类似 Excel 冻结首行）
 .dateHead {
   background: #fafafa;
   font-weight: 600;
   color: #262626;
   font-size: 14px;
-  padding: 8px 4px !important;
+  padding: 0 4px !important;
+  height: 36px;
   white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .weekHead {
   background: #fafafa;
   color: #8c8c8c;
   font-size: 12px;
-  padding: 4px !important;
+  padding: 0 4px !important;
+  height: 22px;
   white-space: nowrap;
+  position: sticky;
+  top: 36px;
+  z-index: 5;
 }
 
 .slotHead {
@@ -101,8 +138,12 @@
   color: #595959;
   font-size: 11px;
   font-weight: 500;
-  padding: 4px 2px !important;
+  padding: 0 2px !important;
+  height: 22px;
   white-space: nowrap;
+  position: sticky;
+  top: 58px;
+  z-index: 5;
 }
 
 .corner {
@@ -112,7 +153,8 @@
   font-size: 13px;
   position: sticky;
   left: 0;
-  z-index: 3;
+  top: 0;
+  z-index: 10;
 }
 
 // 教师列（左侧首列，固定，滑动时保持可见）
@@ -192,15 +234,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #d9d9d9;
-  font-size: 16px;
   cursor: pointer;
   border-radius: 4px;
+  transition: background 0.15s ease;
 
   &:hover {
-    background: #f5f8ff;
-    color: #1677ff;
+    background: #f0f6ff;
   }
+}
+
+// 加号默认隐藏，悬浮时淡入放大，避免满屏加号
+.emptyPlus {
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 500;
+  color: #1677ff;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.emptyCell:hover .emptyPlus {
+  opacity: 1;
+  transform: scale(1);
 }
 
 // 课程卡片（教室号展示在课内，不在教师名下）

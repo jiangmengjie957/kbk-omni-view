@@ -50,17 +50,21 @@ export interface LessonInput {
   endTime: string;
   grade: string;
   note?: string;
+  reason?: string; // 非管理员新增排课时填写的审批原因
   students: LessonStudent[];
 }
 
-// 调课类型：1调整时间 2更换教师 3取消课程
-export type TransferType = 1 | 2 | 3;
+// 工单类型：1调整时间 2更换教师 3取消课程 4新增排课
+export type WorkOrderType = 1 | 2 | 3 | 4;
 
-export const TRANSFER_TYPE_LABEL: Record<TransferType, string> = {
+export const WORK_ORDER_TYPE_LABEL: Record<WorkOrderType, string> = {
   1: '调整时间',
   2: '更换教师',
   3: '取消课程',
+  4: '新增排课',
 };
+
+export type TransferType = WorkOrderType;
 
 // 调课申请状态：0待审批 1通过 2驳回
 export type TransferStatus = 0 | 1 | 2;
@@ -71,11 +75,11 @@ export const TRANSFER_STATUS_LABEL: Record<TransferStatus, string> = {
   2: '已驳回',
 };
 
-// 调课申请
+// 调课/排课工单
 export interface LessonTransfer {
   id: number;
   lessonId: number;
-  type: TransferType;
+  type: WorkOrderType;
   targetDate: string;
   targetStartTime: string;
   targetEndTime: string;

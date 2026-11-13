@@ -45,6 +45,13 @@ export const lessonApi = {
       method: 'PUT',
       body: JSON.stringify({ studentId, status }),
     }).then(() => undefined),
+
+  // 批量导入排课
+  batch: (items: LessonInput[]) =>
+    request<ApiResponse<{ success: number; failed: number; results: { line: number; ok: boolean; message: string }[] }>>(
+      '/lesson/batch',
+      { method: 'POST', body: JSON.stringify({ items }) }
+    ).then((r) => r.data),
 };
 
 export const transferApi = {

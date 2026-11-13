@@ -24,12 +24,13 @@ export function RedirectIfAuth({ children }: Props) {
   return <>{children}</>;
 }
 
-// 权限守卫：缺少指定权限点时跳回 /admin
+// 权限守卫：缺少指定权限点时跳回 /admin；超级管理员放行
 export function RequirePermission({
   permission,
   children,
 }: Props & { permission: string }) {
   const auth = getAuthState();
+  if (auth?.isSuper) return <>{children}</>;
   if (!auth?.permissions?.includes(permission)) {
     return <Navigate to="/admin" replace />;
   }

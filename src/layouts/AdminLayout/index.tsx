@@ -123,7 +123,8 @@ export default function AdminLayout() {
   );
   const [openKeys, setOpenKeys] = useState<string[]>([STATS_MENU_KEY]);
 
-  // 当前用户权限点（登录时由后端写入 localStorage）
+  // 当前用户权限点（登录时由后端写入 localStorage）；超级管理员拥有全部权限
+  const isSuper = useMemo(() => getAuthState()?.isSuper === true, []);
   const permissions = useMemo(() => getAuthState()?.permissions ?? [], []);
 
   // 过滤无权限的菜单项
@@ -134,9 +135,9 @@ export default function AdminLayout() {
         const key = (item as { key?: string }).key;
         if (!key) return true;
         const required = MENU_PERMISSION_REQUIREMENTS[key];
-        return !required || permissions.includes(required);
+        return !required || isSuper || permissions.includes(required);
       }),
-    [permissions]
+    [permissions, isSuper]
   );
 
   // 路由切到统计/基础数据子页时，确保对应父菜单展开

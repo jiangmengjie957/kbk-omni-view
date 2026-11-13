@@ -14,10 +14,14 @@ import {
 import type { TableColumnsType } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { campusApi, employeeApi } from '../../api/basicData';
+import { employeeAccountApi } from '../../api/employeeAccount';
+import type { EmployeeAccountMap } from '../../api/employeeAccount';
+import { getAuthState } from '../../hooks/useAuth';
 import type { EmployeeInput } from '../../api/basicData';
 import type { Campus, Employee } from '../../types/basicData';
 import {
   EMPLOYEE_STATUS_OPTIONS,
+  EMPLOYMENT_TYPE_OPTIONS,
   GENDER_OPTIONS,
   POSITIONS,
 } from '../../types/basicData';
@@ -30,6 +34,7 @@ const TEMPLATE_HEADERS = [
   '姓名',
   '性别',
   '岗位',
+  '用工类型',
   '所属校区',
   '联系电话',
   '入职日期',
@@ -37,7 +42,7 @@ const TEMPLATE_HEADERS = [
   '备注',
 ];
 const TEMPLATE_EXAMPLES = [
-  ['张三', '男', '教师', '宝杨路校区', '13800000000', '2026-01-01', '在职', ''],
+  ['张三', '男', '教师', '全职', '宝杨路校区', '13800000000', '2026-01-01', '在职', ''],
 ];
 
 function mapGender(text: string): 1 | 2 | null {
@@ -48,6 +53,10 @@ function mapGender(text: string): 1 | 2 | null {
 
 function mapStatus(text: string): 1 | 0 {
   return text === '离职' ? 0 : 1;
+}
+
+function mapEmploymentType(text: string): 1 | 2 {
+  return text === '兼职' ? 2 : 1;
 }
 
 export default function EmployeeManage() {
@@ -61,6 +70,20 @@ export default function EmployeeManage() {
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1);
   const [deleting, setDeleting] = useState(false);
   const [form] = Form.useForm<EmployeeInput>();
+
+  // 账号管理相关
+  const [accountMap, setAccountMap] = useState<EmployeeAccountMap | null>(null);
+  const [accountLoading, setAccountLoading] = useState(false);
+  const [showAccount, setShowAccount] = useState<Employee | null>(null);
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [credential, setCredential] = useState<{ username: string; password: string } | null>(null);
+
+  const isAdmin = useMemo(() => {
+    const auth = getAuthState();
+    if (!auth) return false;
+    if (auth.isSuper) return true;
+    return (auth.roles ?? []).includes('admin');
+  }, []);
 
   const campusName = useMemo(
     () => new Map(campuses.map((c) => [c.id, c.name])),
@@ -80,6 +103,16 @@ export default function EmployeeManage() {
       ]);
       setList(employees);
       setCampuses(camps);
+      if (isAdmin) {
+        setAccountLoading(true);
+        try {
+          setAccountMap(await employeeAccountApi.accounts());
+        } catch {
+          setAccountMap(null);
+        } finally {
+          setAccountLoading(false);
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -87,7 +120,45 @@ export default function EmployeeManage() {
 
   useEffect(() => {
     void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 为员工创建账号
+  async function handleCreateAccount(employee: Employee) {
+    setCreatingAccount(true);
+    try {
+      const res = await employeeAccountApi.create(employee.id);
+      setShowAccount(null);
+      setCredential({ username: res.username, password: res.password });
+      setAccountMap((current) => ({
+        ...current,
+        [employee.id]: { username: res.username, status: 1 },
+      }));
+      message.success('账号创建成功');
+    } finally {
+      setCreatingAccount(false);
+    }
+  }
+
+  // 启用/禁用账号
+  async function handleToggleAccount(employee: Employee) {
+    const cur = accountMap?.[String(employee.id)];
+    if (!cur) return;
+    const next = cur.status === 2 ? 1 : 2;
+    await employeeAccountApi.updateStatus(employee.id, next);
+    setAccountMap((current) => ({
+      ...current,
+      [employee.id]: { ...cur, status: next },
+    }));
+    message.success(next === 1 ? '账号已启用' : '账号已禁用');
+  }
+
+  // 重置密码
+  async function handleResetPassword(employee: Employee) {
+    const res = await employeeAccountApi.resetPassword(employee.id);
+    setCredential({ username: res.username, password: res.password });
+    message.success('密码已重置');
+  }
 
   function openCreate() {
     setEditing(null);
@@ -107,6 +178,7 @@ export default function EmployeeManage() {
       name: values.name.trim(),
       gender: values.gender,
       position: values.position,
+      employmentType: values.employmentType ?? 1,
       campusId: values.campusId ?? null,
       phone: (values.phone ?? '').trim(),
       hireDate: (values.hireDate ?? '').trim(),
@@ -177,6 +249,7 @@ export default function EmployeeManage() {
         name,
         gender,
         position,
+        employmentType: mapEmploymentType((row['用工类型'] ?? '').trim()),
         campusId: campusText ? (campusByName.get(campusText) ?? null) : null,
         phone: (row['联系电话'] ?? '').trim(),
         hireDate: (row['入职日期'] ?? '').trim(),
@@ -199,6 +272,14 @@ export default function EmployeeManage() {
       render: (v: Employee['gender']) => (v === 1 ? '男' : '女'),
     },
     { title: '岗位', dataIndex: 'position', key: 'position' },
+    {
+      title: '用工类型',
+      dataIndex: 'employmentType',
+      key: 'employmentType',
+      width: 90,
+      render: (v: Employee['employmentType']) =>
+        v === 2 ? <Tag color="blue">兼职</Tag> : <Tag>全职</Tag>,
+    },
     {
       title: '所属校区',
       dataIndex: 'campusId',
@@ -230,7 +311,58 @@ export default function EmployeeManage() {
         </Space>
       ),
     },
+    {
+      title: '账号状态',
+      key: 'accountStatus',
+      render: (_, record) => {
+        if (!accountMap) return '-';
+        const account = accountMap[String(record.id)];
+        if (!account) return <Tag>未创建</Tag>;
+        if (account.status === 1) return <Tag color="green">已启用</Tag>;
+        if (account.status === 2) return <Tag color="default">已禁用</Tag>;
+        return <Tag color="orange">已锁定</Tag>;
+      },
+    },
+    {
+      title: '账号操作',
+      key: 'accountAction',
+      render: (_, record) => {
+        if (!accountMap) return '-';
+        const account = accountMap[String(record.id)];
+        return account ? (
+          <Space>
+            <Button type="link" size="small" onClick={() => setShowAccount(record)}>
+              查看账号
+            </Button>
+            <Button type="link" size="small" onClick={() => {
+              Modal.confirm({
+                title: '重置密码',
+                content: `确定重置员工「${record.name}」的登录密码吗？原密码将立即失效。`,
+                onOk: () => handleResetPassword(record),
+              });
+            }}>
+              重置密码
+            </Button>
+            <Button type="link" size="small" danger={account.status === 1} onClick={() => {
+              Modal.confirm({
+                title: account.status === 1 ? '禁用账号' : '启用账号',
+                content: `确定${account.status === 1 ? '禁用' : '启用'}员工「${record.name}」的登录账号吗？`,
+                onOk: () => handleToggleAccount(record),
+              });
+            }}>
+              {account.status === 1 ? '禁用' : '启用'}
+            </Button>
+          </Space>
+        ) : (
+          <Button type="link" size="small" onClick={() => setShowAccount(record)}>
+            创建账号
+          </Button>
+        );
+      },
+    },
   ];
+
+  if (!isAdmin) columns.splice(columns.length - 2, 2);
 
   return (
     <div className={styles.page}>
@@ -257,7 +389,7 @@ export default function EmployeeManage() {
           rowKey="id"
           columns={columns}
           dataSource={list}
-          loading={loading}
+          loading={loading || (isAdmin && accountLoading)}
           pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }}
           className={styles.table}
           scroll={{ x: 'max-content' }}
@@ -297,6 +429,14 @@ export default function EmployeeManage() {
               placeholder="请选择"
             />
           </Form.Item>
+          <Form.Item
+            name="employmentType"
+            label="用工类型"
+            initialValue={1}
+            rules={[{ required: true, message: '请选择用工类型' }]}
+          >
+            <Select options={[...EMPLOYMENT_TYPE_OPTIONS]} placeholder="请选择" />
+          </Form.Item>
           <Form.Item name="campusId" label="所属校区">
             <Select
               allowClear
@@ -318,6 +458,46 @@ export default function EmployeeManage() {
           </Form.Item>
         </Form>
       </Modal>
+
+      {isAdmin && (
+        <>
+          <Modal
+            title={accountMap?.[String(showAccount?.id)] ? '查看员工账号' : '创建员工账号'}
+            open={!!showAccount}
+            onOk={() => {
+              if (showAccount && !accountMap?.[String(showAccount.id)]) {
+                return handleCreateAccount(showAccount).catch(() => {});
+              }
+              setShowAccount(null);
+            }}
+            onCancel={() => { if (!creatingAccount) setShowAccount(null); }}
+            okText={accountMap?.[String(showAccount?.id)] ? '关闭' : '确认创建'}
+            confirmLoading={creatingAccount}
+            cancelButtonProps={{ disabled: creatingAccount }}
+            maskClosable={false}
+          >
+            {accountMap?.[String(showAccount?.id)] ? (
+              <p>员工「{showAccount?.name}」的登录账号：<strong>{accountMap[String(showAccount?.id)].username}</strong>。密码无法查看，如需新密码请重置。</p>
+            ) : (
+              <p>确定为员工「{showAccount?.name}」创建登录账号吗？初始账号和密码仅在创建成功后显示一次。</p>
+            )}
+          </Modal>
+          <Modal
+            title="初始登录凭据"
+            open={!!credential}
+            onOk={() => setCredential(null)}
+            onCancel={() => setCredential(null)}
+            okText="我已保存"
+            cancelButtonProps={{ style: { display: 'none' } }}
+            maskClosable={false}
+            destroyOnClose
+          >
+            <p>登录账号：<strong>{credential?.username}</strong></p>
+            <p>初始密码：<strong>{credential?.password}</strong></p>
+            <p>请妥善保存并安全告知员工；关闭后无法再次查看，只能重置密码。</p>
+          </Modal>
+        </>
+      )}
 
       <Modal
         title={deleteStep === 1 ? '删除员工' : '再次确认删除'}

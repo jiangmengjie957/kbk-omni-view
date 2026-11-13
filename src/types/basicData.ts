@@ -20,6 +20,7 @@ export interface Employee {
   name: string; // 姓名（必填）
   gender: Gender; // 性别（必填）
   position: string; // 岗位（必填）
+  employmentType: 1 | 2; // 用工类型：1 全职 2 兼职
   campusId: number | null; // 所属校区
   phone: string; // 联系电话
   hireDate: string; // 入职日期
@@ -103,6 +104,16 @@ export const EMPLOYEE_STATUS_OPTIONS = [
   { value: 1, label: '在职' },
   { value: 0, label: '离职' },
 ] as const;
+
+export const EMPLOYMENT_TYPE_OPTIONS = [
+  { value: 1, label: '全职' },
+  { value: 2, label: '兼职' },
+] as const;
+
+export const EMPLOYMENT_TYPE_LABEL: Record<number, string> = {
+  1: '全职',
+  2: '兼职',
+};
 
 export const STUDENT_STATUS_OPTIONS = [
   { value: 1, label: '在读' },

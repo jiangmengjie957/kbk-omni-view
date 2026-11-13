@@ -18,10 +18,17 @@ import {
   Tag,
   TimePicker,
   Typography,
+  Upload,
   message,
 } from 'antd';
 import {
   AuditOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
+  ImportOutlined,
+  InboxOutlined,
   LeftOutlined,
   PlusOutlined,
   RightOutlined,
@@ -29,6 +36,8 @@ import {
 } from '@ant-design/icons';
 import { lessonApi, transferApi } from '../../api/lesson';
 import { employeeApi, studentApi, classroomApi } from '../../api/basicData';
+import { getAuthState } from '../../hooks/useAuth';
+import { parseExcel, downloadTemplate } from '../../utils/excel';
 import type { Employee, Student, Classroom } from '../../types/basicData';
 import type {
   Lesson,
@@ -37,7 +46,11 @@ import type {
   StudentLessonStatus,
   TransferType,
 } from '../../types/lesson';
-import { STUDENT_LESSON_STATUS_LABEL, STUDENT_LESSON_STATUS_OPTIONS } from '../../types/lesson';
+import {
+  STUDENT_LESSON_STATUS_LABEL,
+  STUDENT_LESSON_STATUS_OPTIONS,
+  WORK_ORDER_TYPE_LABEL,
+} from '../../types/lesson';
 import styles from './index.module.scss';
 
 const { Title, Text } = Typography;
@@ -58,6 +71,28 @@ const TIME_SLOTS = [
 ];
 
 const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+// 排课导入模板列（与后端 normalizeInput 对应）
+const IMPORT_HEADERS = ['日期', '开始时间', '结束时间', '教师姓名', '年级', '学生姓名', '教室编号', '备注'];
+const IMPORT_EXAMPLES = [['2026-11-14', '13:00', '15:00', '黄伊楠', '高一', '李承恩、张伟', 'A08', '']];
+
+// 给 AI 的整理提示词（用户可复制，让 AI 把现有文件整理成导入格式）
+const AI_PROMPT = `请帮我把以下排课信息整理成一张表格（Excel 可导入的格式），表头必须是这 8 列，顺序固定：
+日期 | 开始时间 | 结束时间 | 教师姓名 | 年级 | 学生姓名 | 教室编号 | 备注
+
+要求：
+1. 日期格式 YYYY-MM-DD（如 2026-11-14）；
+2. 开始时间/结束时间格式 HH:mm（如 13:00、15:00）；
+3. 教师姓名需与系统中的教师姓名完全一致；
+4. 学生姓名用「、」分隔（一对多班级填多个学生）；若一个班里有多名学生，写在同一行用顿号隔开；
+5. 年级填 高一/高二/高三/新高一/九年级/八年级/七年级 等，与系统一致；
+6. 教室编号如 A08、A15，没有可留空；
+7. 备注可留空；
+8. 一节课一行，不要把同一老师不同时间段合并到一格。
+
+整理完成后，请直接输出可复制到 Excel 的表格内容（每列用制表符分隔，或直接给我 CSV）。`;
+
+const AI_PROMPT_COPY = AI_PROMPT; // 供复制使用
 
 // ── 日期工具 ──
 function toDateStr(d: Date): string {
@@ -240,8 +275,31 @@ export default function ScheduleManage() {
   const [customTime, setCustomTime] = useState('');
   const [transferTimeMode, setTransferTimeMode] = useState<'slot' | 'custom'>('slot');
   const [customNewTime, setCustomNewTime] = useState('');
+  const [fullscreen, setFullscreen] = useState(false);
+
+  // 导入相关
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{ success: number; failed: number; results: { line: number; ok: boolean; message: string }[] } | null>(null);
 
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
+
+  // 当前用户角色：管理员（含超级管理员）可直接排课，无需审批
+  const isAdminUser = useMemo(() => {
+    const auth = getAuthState();
+    if (!auth) return false;
+    if (auth.isSuper) return true;
+    return (auth.roles ?? []).includes('admin');
+  }, []);
+
+  // 是否可审批（管理员/教务/校长）
+  const canApprove = useMemo(() => {
+    const auth = getAuthState();
+    if (!auth) return false;
+    if (auth.isSuper) return true;
+    const roles = auth.roles ?? [];
+    return roles.includes('admin') || roles.includes('academic') || roles.includes('principal');
+  }, []);
 
   const teacherById = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
   const studentById = useMemo(() => new Map(students.map((s) => [s.id, s])), [students]);
@@ -290,6 +348,7 @@ export default function ScheduleManage() {
       studentApi.list(),
       classroomApi.list(),
     ]);
+    // 教师列表只展示岗位为「教师」的员工（即使没排课也会显示）
     setTeachers(emps.filter((e) => e.position === '教师'));
     setStudents(stus);
     setClassrooms(rooms);
@@ -331,6 +390,97 @@ export default function ScheduleManage() {
   function splitTimeRange(range: string): { startTime: string; endTime: string } {
     const [start = '', end = ''] = range.split('-');
     return { startTime: start, endTime: end };
+  }
+
+  // 解析导入的 Excel：按表头映射为 LessonInput 数组
+  async function handleImportFile(file: File) {
+    setImporting(true);
+    setImportResult(null);
+    try {
+      const rows = await parseExcel(file);
+      if (!rows.length) {
+        message.warning('文件中没有可导入的数据');
+        return;
+      }
+      const items: LessonInput[] = [];
+      const errors: string[] = [];
+      rows.forEach((row, idx) => {
+        const line = idx + 2;
+        const date = (row['日期'] ?? '').trim();
+        const start = (row['开始时间'] ?? '').trim();
+        const end = (row['结束时间'] ?? '').trim();
+        const teacherName = (row['教师姓名'] ?? '').trim();
+        const grade = (row['年级'] ?? '').trim();
+        const studentNames = (row['学生姓名'] ?? '').trim();
+        const classroomNo = (row['教室编号'] ?? '').trim();
+        const note = (row['备注'] ?? '').trim();
+
+        const teacher = teachers.find((t) => t.name === teacherName);
+        if (!teacher) {
+          errors.push(`第 ${line} 行：教师「${teacherName || '(空)'}」不存在`);
+          return;
+        }
+        if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          errors.push(`第 ${line} 行：日期格式不正确（应为 YYYY-MM-DD）`);
+          return;
+        }
+        if (!studentNames) {
+          errors.push(`第 ${line} 行：学生姓名为空`);
+          return;
+        }
+        const nameList = studentNames.split(/[、,，\s]+/).map((s) => s.trim()).filter(Boolean);
+        const studentIds: number[] = [];
+        const missing: string[] = [];
+        for (const nm of nameList) {
+          const st = students.find((s) => s.name === nm);
+          if (st) studentIds.push(st.id);
+          else missing.push(nm);
+        }
+        if (missing.length) {
+          errors.push(`第 ${line} 行：学生「${missing.join('、')}」不存在`);
+          return;
+        }
+        const classroom = classroomNo ? classrooms.find((c) => c.roomNo === classroomNo) : undefined;
+        if (classroomNo && !classroom) {
+          errors.push(`第 ${line} 行：教室「${classroomNo}」不存在`);
+          return;
+        }
+
+        items.push({
+          teacherId: teacher.id,
+          classroomId: classroom?.id ?? null,
+          lessonDate: date,
+          startTime: start,
+          endTime: end,
+          grade,
+          note,
+          reason: '批量导入排课',
+          students: studentIds.map((sid) => ({ studentId: sid, status: 1 as StudentLessonStatus })),
+        });
+      });
+
+      if (!items.length && !errors.length) {
+        message.warning('没有可导入的数据');
+        return;
+      }
+
+      let result: { success: number; failed: number; results: { line: number; ok: boolean; message: string }[] } = { success: 0, failed: errors.length, results: [] };
+      if (items.length) {
+        const res = await lessonApi.batch(items);
+        // 合并后端冲突结果与本地预校验错误
+        result = {
+          success: res.success,
+          failed: res.failed + errors.length,
+          results: res.results,
+        };
+      }
+      setImportResult(result);
+      if (result.success > 0) await refreshLessons();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '导入失败');
+    } finally {
+      setImporting(false);
+    }
   }
 
   function openCreate(prefill: { teacherId?: number; date?: string; timeRange?: string } = {}) {
@@ -408,6 +558,7 @@ export default function ScheduleManage() {
         endTime,
         grade: values.grade ?? '',
         note: values.note ?? '',
+        reason: values.reason ?? '',
         students: studentIds.map((sid) => ({ studentId: sid, status: 1 as StudentLessonStatus })),
       };
       if (editing) {
@@ -415,10 +566,12 @@ export default function ScheduleManage() {
         message.success('已更新');
       } else {
         await lessonApi.create(payload);
-        message.success('已新增排课');
+        // 非管理员排课走审批
+        message.success(isAdminUser ? '已新增排课' : '已提交排课申请，等待审批');
       }
       setCreateOpen(false);
       await refreshLessons();
+      if (!isAdminUser) await refreshTransfers();
     } finally {
       setSaving(false);
     }
@@ -497,6 +650,7 @@ export default function ScheduleManage() {
     await transferApi.approve(id, 'reject');
     message.info('已驳回');
     await refreshTransfers();
+    await refreshLessons();
   }
 
   function openApprovals() {
@@ -508,7 +662,7 @@ export default function ScheduleManage() {
   const pendingCount = transfers.filter((t) => t.status === 0).length;
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${fullscreen ? styles.fullscreen : ''}`}>
       <div className={styles.pageHeader}>
         <Title level={4} className={styles.title}>
           排课管理
@@ -522,6 +676,12 @@ export default function ScheduleManage() {
           <Text className={styles.weekRange}>
             {toDateStr(dates[0])} ~ {toDateStr(dates[6])}
           </Text>
+          <Button
+            icon={fullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+            onClick={() => setFullscreen((v) => !v)}
+          >
+            {fullscreen ? '退出全屏' : '全屏'}
+          </Button>
         </Space>
       </div>
 
@@ -538,6 +698,11 @@ export default function ScheduleManage() {
           <Button icon={<SwapOutlined />} onClick={() => openTransfer()}>
             申请调课
           </Button>
+          {isAdminUser && (
+            <Button icon={<ImportOutlined />} onClick={() => { setImportResult(null); setImportOpen(true); }}>
+              导入
+            </Button>
+          )}
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openCreate()}>
             新增排课
           </Button>
@@ -645,7 +810,7 @@ export default function ScheduleManage() {
                                 openCreate({ teacherId: t.id, date: ds, timeRange: slot })
                               }
                             >
-                              +
+                              <span className={styles.emptyPlus}>+</span>
                             </div>
                           </div>
                         </td>
@@ -719,6 +884,104 @@ export default function ScheduleManage() {
         )}
       </Drawer>
 
+      {/* 导入排课 */}
+      <Modal
+        title="导入排课"
+        open={importOpen}
+        onCancel={() => setImportOpen(false)}
+        width={640}
+        maskClosable={false}
+        footer={
+          importResult
+            ? [
+                <Button key="done" type="primary" onClick={() => setImportOpen(false)}>
+                  完成
+                </Button>,
+              ]
+            : null
+        }
+      >
+        {importResult ? (
+          <div>
+            <p>
+              成功 <b>{importResult.success}</b> 条
+              {importResult.failed > 0 && (
+                <>
+                  ，失败 <b>{importResult.failed}</b> 条
+                </>
+              )}
+            </p>
+            {importResult.failed > 0 && (
+              <>
+                <Text type="danger">失败明细：</Text>
+                <ul style={{ maxHeight: 240, overflow: 'auto', paddingLeft: 20 }}>
+                  {importResult.results
+                    .filter((r) => !r.ok)
+                    .map((r) => (
+                      <li key={r.line}>
+                        第 {r.line} 行：{r.message}
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="导入格式要求"
+              description={
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span>
+                    模板列：{IMPORT_HEADERS.join(' | ')}
+                  </span>
+                  <span>
+                    · 教师/学生/教室需与系统中已有数据一致；一对多班级学生用「、」分隔
+                  </span>
+                </div>
+              }
+            />
+            <Upload.Dragger
+              accept=".xlsx,.xls"
+              maxCount={1}
+              showUploadList={false}
+              disabled={importing}
+              beforeUpload={(file) => {
+                void handleImportFile(file);
+                return false;
+              }}
+            >
+              <p className="ant-upload-drag-icon">
+                <InboxOutlined />
+              </p>
+              <p className="ant-upload-text">点击或拖拽 Excel 文件到此处上传</p>
+              <p className="ant-upload-hint">支持 .xlsx / .xls，第一行为表头</p>
+            </Upload.Dragger>
+
+            <Space style={{ marginTop: 16 }}>
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => downloadTemplate('排课导入模板.xlsx', IMPORT_HEADERS, IMPORT_EXAMPLES)}
+              >
+                下载模板
+              </Button>
+              <Button
+                icon={<CopyOutlined />}
+                onClick={() => {
+                  void navigator.clipboard.writeText(AI_PROMPT_COPY);
+                  message.success('提示词已复制，粘贴给 AI 即可');
+                }}
+              >
+                复制 AI 提示词
+              </Button>
+            </Space>
+          </>
+        )}
+      </Modal>
+
       {/* 新增/编辑排课 */}
       <Modal
         title={editing ? '编辑排课' : '新增排课'}
@@ -729,6 +992,7 @@ export default function ScheduleManage() {
         forceRender
         width={500}
         maskClosable={false}
+        zIndex={1200}
       >
         <Form form={form} layout="vertical">
           <Form.Item name="teacherId" label="教师" rules={[{ required: true, message: '请选择教师' }]}>
@@ -804,6 +1068,22 @@ export default function ScheduleManage() {
           <Form.Item name="note" label="备注/标签">
             <Input placeholder="如 1V1 / 6-8人 / 代课" maxLength={50} />
           </Form.Item>
+          {!isAdminUser && !editing && (
+            <Form.Item
+              name="reason"
+              label="排课申请原因"
+              rules={[{ required: true, message: '请填写排课申请原因' }]}
+            >
+              <Input.TextArea placeholder="请说明排课原因（将提交给教务/校长/管理员审批）" rows={3} maxLength={200} />
+            </Form.Item>
+          )}
+          {!isAdminUser && !editing && (
+            <Alert
+              type="info"
+              showIcon
+              message="非管理员排课需教务/校长/管理员审批，审批通过后生效，审批期间该档期将被占用。"
+            />
+          )}
         </Form>
       </Modal>
 
@@ -816,6 +1096,7 @@ export default function ScheduleManage() {
         forceRender
         width={520}
         maskClosable={false}
+        zIndex={1200}
       >
         <Form form={transferForm} layout="vertical">
           <Form.Item name="lessonId" label="选择课程" rules={[{ required: true, message: '请选择要调动的课程' }]}>
@@ -898,20 +1179,21 @@ export default function ScheduleManage() {
         </Form>
       </Modal>
 
-      {/* 调课审批 */}
+      {/* 排课/调课工单审批 */}
       <Drawer
-        title="调课审批"
+        title="工单审批"
         width={460}
         open={approvalsOpen}
         onClose={() => setApprovalsOpen(false)}
       >
         {transfers.length === 0 ? (
-          <Empty description="暂无调课申请" />
+          <Empty description="暂无工单" />
         ) : (
           <div className={styles.approvalList}>
             {transfers.map((tr) => (
               <div key={tr.id} className={styles.approvalItem}>
                 <div className={styles.approvalTitle}>
+                  <Tag color="blue">{WORK_ORDER_TYPE_LABEL[tr.type] ?? `类型${tr.type}`}</Tag>
                   {tr.lesson
                     ? `${tr.lesson.grade || '-'} · ${tr.lesson.timeRange}`
                     : `课程#${tr.lessonId}`}
@@ -920,17 +1202,22 @@ export default function ScheduleManage() {
                   {tr.type === 1 && `调整时间 → ${tr.targetDate} ${tr.targetStartTime}-${tr.targetEndTime}`}
                   {tr.type === 2 && `更换教师 → 教师#${tr.targetTeacherId}`}
                   {tr.type === 3 && '取消课程'}
+                  {tr.type === 4 && '申请新增排课'}
                 </div>
-                <div className={styles.approvalReason}>原因：{tr.reason}</div>
+                <div className={styles.approvalReason}>原因：{tr.reason || '-'}</div>
                 {tr.status === 0 ? (
-                  <Space className={styles.approvalActions}>
-                    <Button size="small" type="primary" onClick={() => approveTransfer(tr.id)}>
-                      通过
-                    </Button>
-                    <Button size="small" onClick={() => rejectTransfer(tr.id)}>
-                      驳回
-                    </Button>
-                  </Space>
+                  canApprove ? (
+                    <Space className={styles.approvalActions}>
+                      <Button size="small" type="primary" onClick={() => approveTransfer(tr.id)}>
+                        通过
+                      </Button>
+                      <Button size="small" onClick={() => rejectTransfer(tr.id)}>
+                        驳回
+                      </Button>
+                    </Space>
+                  ) : (
+                    <Tag color="processing">待审批</Tag>
+                  )
                 ) : (
                   <Tag color={tr.status === 1 ? 'green' : 'red'}>
                     {tr.status === 1 ? '已通过' : '已驳回'}
