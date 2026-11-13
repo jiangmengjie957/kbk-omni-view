@@ -46,6 +46,8 @@ import type {
   TransferType,
 } from '../../types/lesson';
 import {
+  LESSON_STATUS_COLOR,
+  LESSON_STATUS_LABEL,
   STUDENT_LESSON_STATUS_LABEL,
   STUDENT_LESSON_STATUS_OPTIONS,
   WORK_ORDER_TYPE_LABEL,
@@ -239,8 +241,8 @@ function LessonCard({ lesson, studentName, onOpen }: {
         )}
         {lesson.note && <span className={styles.note}>{lesson.note}</span>}
         {pending && (
-          <Tag className={styles.statusTag} color="warning">
-            审批中
+          <Tag className={styles.statusTag} color={LESSON_STATUS_COLOR[lesson.status]}>
+            {LESSON_STATUS_LABEL[lesson.status]}
           </Tag>
         )}
       </div>
@@ -863,6 +865,11 @@ export default function ScheduleManage() {
         {detailLesson && (
           <>
             <Descriptions column={1} size="small" bordered>
+              <Descriptions.Item label="审批状态">
+                <Tag color={LESSON_STATUS_COLOR[detailLesson.status]}>
+                  {LESSON_STATUS_LABEL[detailLesson.status]}
+                </Tag>
+              </Descriptions.Item>
               <Descriptions.Item label="年级">{detailLesson.grade || '-'}</Descriptions.Item>
               <Descriptions.Item label="教师">
                 {teacherById.get(detailLesson.teacherId) ?? '-'}

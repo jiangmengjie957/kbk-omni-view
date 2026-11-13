@@ -17,6 +17,18 @@ export const STUDENT_LESSON_STATUS_OPTIONS = (
 // 课程状态：1正常 2待审批 3已取消
 export type LessonStatus = 1 | 2 | 3;
 
+export const LESSON_STATUS_LABEL: Record<LessonStatus, string> = {
+  1: '正常',
+  2: '待审批',
+  3: '已取消',
+};
+
+export const LESSON_STATUS_COLOR: Record<LessonStatus, string> = {
+  1: 'green',
+  2: 'warning',
+  3: 'default',
+};
+
 // 一节课里的一个学生及其上课状态
 export interface LessonStudent {
   studentId: number;
