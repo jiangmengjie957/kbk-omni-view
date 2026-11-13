@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import {
   Alert,
@@ -38,11 +39,9 @@ import { lessonApi, transferApi } from '../../api/lesson';
 import { employeeApi, studentApi, classroomApi } from '../../api/basicData';
 import { getAuthState } from '../../hooks/useAuth';
 import { parseExcel, downloadTemplate } from '../../utils/excel';
-import type { Employee, Student, Classroom } from '../../types/basicData';
 import type {
   Lesson,
   LessonInput,
-  LessonTransfer,
   StudentLessonStatus,
   TransferType,
 } from '../../types/lesson';
@@ -252,19 +251,12 @@ function LessonCard({ lesson, studentName, onOpen }: {
 export default function ScheduleManage() {
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(new Date()));
 
-  const [teachers, setTeachers] = useState<Employee[]>([]);
-  const [students, setStudents] = useState<Student[]>([]);
-  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [loading, setLoading] = useState(false);
-
   const [detailLesson, setDetailLesson] = useState<Lesson | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Lesson | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferType, setTransferType] = useState<TransferType>(1);
   const [approvalsOpen, setApprovalsOpen] = useState(false);
-  const [transfers, setTransfers] = useState<LessonTransfer[]>([]);
 
   const [saving, setSaving] = useState(false);
 
@@ -287,6 +279,47 @@ export default function ScheduleManage() {
   const [importResult, setImportResult] = useState<{ success: number; failed: number; results: { line: number; ok: boolean; message: string }[] } | null>(null);
 
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
+
+  const queryClient = useQueryClient();
+
+  const weekRange = useMemo(
+    () => [toDateStr(dates[0]), toDateStr(dates[6])] as const,
+    [dates]
+  );
+
+  // 基础数据（教师/学员/教室）
+  const { data: baseData, isLoading: baseLoading } = useQuery({
+    queryKey: ['schedule', 'base'],
+    queryFn: async () => {
+      const [emps, stus, rooms] = await Promise.all([
+        employeeApi.list(),
+        studentApi.list(),
+        classroomApi.list(),
+      ]);
+      return { emps, stus, rooms };
+    },
+  });
+
+  // 本周排课（随周次变化自动请求；窗口聚焦时 react-query 自动重新请求）
+  const { data: lessons = [], isLoading: lessonsLoading } = useQuery({
+    queryKey: ['schedule', 'lessons', weekRange[0], weekRange[1]],
+    queryFn: () => lessonApi.list({ startDate: weekRange[0], endDate: weekRange[1] }),
+  });
+
+  // 工单（审批通知）
+  const { data: transfers = [] } = useQuery({
+    queryKey: ['schedule', 'transfers'],
+    queryFn: () => transferApi.list(),
+  });
+
+  // 教师列表只展示岗位为「教师」的员工（即使没排课也会显示）
+  const teachers = useMemo(
+    () => (baseData?.emps ?? []).filter((e) => e.position === '教师'),
+    [baseData]
+  );
+  const students = baseData?.stus ?? [];
+  const classrooms = baseData?.rooms ?? [];
+  const loading = baseLoading || lessonsLoading;
 
   // 当前用户角色：管理员（含超级管理员）可直接排课，无需审批
   const isAdminUser = useMemo(() => {
@@ -339,51 +372,6 @@ export default function ScheduleManage() {
     }
     return map;
   }, [lessons]);
-
-  async function refreshLessons() {
-    const [start, end] = [toDateStr(dates[0]), toDateStr(dates[6])];
-    const list = await lessonApi.list({ startDate: start, endDate: end });
-    setLessons(list);
-  }
-
-  async function refreshBase() {
-    const [emps, stus, rooms] = await Promise.all([
-      employeeApi.list(),
-      studentApi.list(),
-      classroomApi.list(),
-    ]);
-    // 教师列表只展示岗位为「教师」的员工（即使没排课也会显示）
-    setTeachers(emps.filter((e) => e.position === '教师'));
-    setStudents(stus);
-    setClassrooms(rooms);
-  }
-
-  async function refresh() {
-    setLoading(true);
-    try {
-      await refreshBase();
-      await refreshLessons();
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-    // 审批人页面加载时即拉取工单，保证待审批角标/列表可见
-    void refreshTransfers().catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (dates.length) void refreshLessons();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart]);
-
-  async function refreshTransfers() {
-    const list = await transferApi.list();
-    setTransfers(list);
-  }
 
   function shiftWeek(days: number) {
     setWeekStart((prev) => {
@@ -481,7 +469,7 @@ export default function ScheduleManage() {
         };
       }
       setImportResult(result);
-      if (result.success > 0) await refreshLessons();
+      if (result.success > 0) await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
     } catch (err) {
       message.error(err instanceof Error ? err.message : '导入失败');
     } finally {
@@ -576,8 +564,8 @@ export default function ScheduleManage() {
         message.success(isAdminUser ? '已新增排课' : '已提交排课申请，等待审批');
       }
       setCreateOpen(false);
-      await refreshLessons();
-      if (!isAdminUser) await refreshTransfers();
+      await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+      if (!isAdminUser) await queryClient.invalidateQueries({ queryKey: ['schedule', 'transfers'] });
     } finally {
       setSaving(false);
     }
@@ -589,7 +577,7 @@ export default function ScheduleManage() {
       await lessonApi.remove(id);
       message.success('已删除');
       setDetailLesson(null);
-      await refreshLessons();
+      await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
       return;
     }
     setDeleteReason('');
@@ -609,8 +597,8 @@ export default function ScheduleManage() {
       setDeleteReason('');
       setDetailLesson(null);
       message.success(res.pending ? '已提交删除申请，等待审批' : '已删除');
-      await refreshLessons();
-      await refreshTransfers();
+      await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+      await queryClient.invalidateQueries({ queryKey: ['schedule', 'transfers'] });
     } finally {
       setSaving(false);
     }
@@ -628,7 +616,7 @@ export default function ScheduleManage() {
           }
         : prev
     );
-    await refreshLessons();
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
     message.success('已更新学生状态');
   }
 
@@ -667,26 +655,26 @@ export default function ScheduleManage() {
     });
     message.success('调课申请已提交，等待审批');
     setTransferOpen(false);
-    await refreshTransfers();
-    await refreshLessons();
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'transfers'] });
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
   }
 
   async function approveTransfer(id: number) {
     await transferApi.approve(id, 'approve');
     message.success('已通过并生效');
-    await refreshTransfers();
-    await refreshLessons();
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'transfers'] });
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
   }
 
   async function rejectTransfer(id: number) {
     await transferApi.approve(id, 'reject');
     message.info('已驳回');
-    await refreshTransfers();
-    await refreshLessons();
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'transfers'] });
+    await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
   }
 
   function openApprovals() {
-    void refreshTransfers();
+    void queryClient.invalidateQueries({ queryKey: ['schedule', 'transfers'] });
     setApprovalsOpen(true);
   }
 
