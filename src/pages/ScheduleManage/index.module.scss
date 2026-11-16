@@ -20,6 +20,16 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
+
+    // antd Spin 的包裹层也要撑满卡片，否则中间的 Spin 会打断 flex 链，
+    // 导致 gridWrap 的 flex:1 失效、纵向无法滚动
+    :global(.ant-spin-nested-loading),
+    :global(.ant-spin-container) {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
   }
 
   .gridWrap {
