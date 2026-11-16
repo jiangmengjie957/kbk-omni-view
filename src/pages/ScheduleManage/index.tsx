@@ -5,6 +5,7 @@ import {
   Alert,
   Badge,
   Button,
+  DatePicker,
   Descriptions,
   Drawer,
   Empty,
@@ -36,6 +37,7 @@ import {
   SwapOutlined,
 } from '@ant-design/icons';
 import { lessonApi, transferApi } from '../../api/lesson';
+import type { CopyDayResult } from '../../api/lesson';
 import { employeeApi, studentApi, classroomApi } from '../../api/basicData';
 import { getAuthState } from '../../hooks/useAuth';
 import { parseExcel, downloadTemplate } from '../../utils/excel';
@@ -280,6 +282,12 @@ export default function ScheduleManage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ success: number; failed: number; results: { line: number; ok: boolean; message: string }[] } | null>(null);
 
+  // 按天批量复制/转移课程
+  const [copyDayOpen, setCopyDayOpen] = useState(false);
+  const [copying, setCopying] = useState(false);
+  const [copyDayResult, setCopyDayResult] = useState<CopyDayResult | null>(null);
+  const [copyForm] = Form.useForm();
+
   const dates = useMemo(() => weekDates(weekStart), [weekStart]);
 
   const queryClient = useQueryClient();
@@ -338,6 +346,15 @@ export default function ScheduleManage() {
     if (auth.isSuper) return true;
     const roles = auth.roles ?? [];
     return roles.includes('admin') || roles.includes('academic') || roles.includes('principal');
+  }, []);
+
+  // 是否可按天批量复制/转移（管理员/教务）
+  const canBulkSchedule = useMemo(() => {
+    const auth = getAuthState();
+    if (!auth) return false;
+    if (auth.isSuper) return true;
+    const roles = auth.roles ?? [];
+    return roles.includes('admin') || roles.includes('academic');
   }, []);
 
   const teacherById = useMemo(() => new Map(teachers.map((t) => [t.id, t.name])), [teachers]);
@@ -680,6 +697,33 @@ export default function ScheduleManage() {
     setApprovalsOpen(true);
   }
 
+  function openCopyDay() {
+    setCopyDayResult(null);
+    copyForm.resetFields();
+    copyForm.setFieldsValue({ mode: 'copy' });
+    setCopyDayOpen(true);
+  }
+
+  async function submitCopyDay() {
+    const values = await copyForm.validateFields();
+    const sourceDate = values.sourceDate.format('YYYY-MM-DD');
+    const targetDate = values.targetDate.format('YYYY-MM-DD');
+    if (sourceDate === targetDate) {
+      message.warning('源日期与目标日期不能相同');
+      return;
+    }
+    setCopying(true);
+    try {
+      const res = await lessonApi.copyDay({ sourceDate, targetDate, mode: values.mode });
+      setCopyDayResult(res);
+      await queryClient.invalidateQueries({ queryKey: ['schedule', 'lessons'] });
+    } catch {
+      // 错误已在公共请求层统一提示
+    } finally {
+      setCopying(false);
+    }
+  }
+
   const normalLessons = useMemo(() => lessons.filter((l) => l.status !== 2), [lessons]);
   const pendingCount = transfers.filter((t) => t.status === 0).length;
 
@@ -720,6 +764,11 @@ export default function ScheduleManage() {
           <Button icon={<SwapOutlined />} onClick={() => openTransfer()}>
             申请调课
           </Button>
+          {canBulkSchedule && (
+            <Button icon={<CopyOutlined />} onClick={openCopyDay}>
+              复制/转移
+            </Button>
+          )}
           {isAdminUser && (
             <Button icon={<ImportOutlined />} onClick={() => { setImportResult(null); setImportOpen(true); }}>
               导入
@@ -1236,6 +1285,96 @@ export default function ScheduleManage() {
           rows={3}
           maxLength={200}
         />
+      </Modal>
+
+      {/* 按天批量复制/转移课程 */}
+      <Modal
+        title="按天复制/转移课程"
+        open={copyDayOpen}
+        onOk={submitCopyDay}
+        onCancel={() => setCopyDayOpen(false)}
+        confirmLoading={copying}
+        width={560}
+        maskClosable={false}
+        zIndex={1200}
+        footer={
+          copyDayResult
+            ? [
+                <Button key="done" type="primary" onClick={() => setCopyDayOpen(false)}>
+                  完成
+                </Button>,
+              ]
+            : undefined
+        }
+      >
+        {copyDayResult ? (
+          <div>
+            <p>
+              共 {copyDayResult.total} 节课，成功 <b>{copyDayResult.success}</b> 节
+              {copyDayResult.skipped > 0 && (
+                <>
+                  ，跳过 <b>{copyDayResult.skipped}</b> 节（与目标日期冲突）
+                </>
+              )}
+            </p>
+            {copyDayResult.skipped > 0 && (
+              <>
+                <Text type="danger">跳过明细：</Text>
+                <ul style={{ maxHeight: 240, overflow: 'auto', paddingLeft: 20 }}>
+                  {copyDayResult.results
+                    .filter((r) => !r.ok)
+                    .map((r) => (
+                      <li key={r.lessonId}>
+                        {r.timeRange}：{r.message}
+                      </li>
+                    ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ) : (
+          <Form form={copyForm} layout="vertical">
+            <Form.Item
+              name="sourceDate"
+              label="源日期"
+              rules={[{ required: true, message: '请选择源日期' }]}
+            >
+              <DatePicker
+                style={{ width: '100%' }}
+                format="YYYY-MM-DD"
+                placeholder="选择要复制/转移的日期"
+              />
+            </Form.Item>
+            <Form.Item
+              name="targetDate"
+              label="目标日期"
+              rules={[{ required: true, message: '请选择目标日期' }]}
+            >
+              <DatePicker
+                style={{ width: '100%' }}
+                format="YYYY-MM-DD"
+                placeholder="选择目标日期"
+              />
+            </Form.Item>
+            <Form.Item name="mode" label="方式" initialValue="copy">
+              <Radio.Group>
+                <Radio.Button value="copy">复制</Radio.Button>
+                <Radio.Button value="move">转移</Radio.Button>
+              </Radio.Group>
+            </Form.Item>
+            <Alert
+              type="info"
+              showIcon
+              message={
+                <div>
+                  <div>复制：在目标日期生成一份相同课程，源日期课程保留。</div>
+                  <div>转移：把源日期当天全部课程改到目标日期（源日期清空）。</div>
+                  <div>目标日期已有冲突的课程会被跳过，并在结果中列出。</div>
+                </div>
+              }
+            />
+          </Form>
+        )}
       </Modal>
 
       {/* 排课/调课工单审批 */}

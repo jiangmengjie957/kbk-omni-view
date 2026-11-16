@@ -7,6 +7,16 @@ interface ApiResponse<T> {
   data: T;
 }
 
+export interface CopyDayResult {
+  sourceDate: string;
+  targetDate: string;
+  mode: 'copy' | 'move';
+  total: number;
+  success: number;
+  skipped: number;
+  results: { lessonId: number; timeRange: string; ok: boolean; message: string }[];
+}
+
 export const lessonApi = {
   // 查询（可选日期范围）
   list: (params?: { startDate?: string; endDate?: string }) => {
@@ -53,6 +63,13 @@ export const lessonApi = {
       '/lesson/batch',
       { method: 'POST', body: JSON.stringify({ items }) }
     ).then((r) => r.data),
+
+  // 按天批量复制/转移课程
+  copyDay: (data: { sourceDate: string; targetDate: string; mode: 'copy' | 'move' }) =>
+    request<ApiResponse<CopyDayResult>>('/lesson/copy-day', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }).then((r) => r.data),
 };
 
 export const transferApi = {
